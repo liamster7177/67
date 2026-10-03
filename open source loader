@@ -102,8 +102,17 @@ local function resolveOne(spec, cacheName)
             local present = false
             pcall(function() present = isfile(cached) end)
             if present then
-                local ok, asset = pcall(gca, cached)
-                if ok and asset then return asset end
+                local good = true
+                if type(readfile) == "function" then
+                    local okR, raw = pcall(readfile, cached)
+                    good = okR and imageKind(raw) ~= nil
+                end
+                if good then
+                    local ok, asset = pcall(gca, cached)
+                    if ok and asset then return asset end
+                elseif type(delfile) == "function" then
+                    pcall(delfile, cached)
+                end
             end
         end
     end
@@ -332,14 +341,6 @@ local function buildCard(entry, order)
     imgHolder.Parent = card
     local ic = Instance.new("UICorner") ic.CornerRadius = UDim.new(0, 7) ic.Parent = imgHolder
 
-    local img = Instance.new("ImageLabel")
-    img.Size = UDim2.fromScale(1, 1)
-    img.BackgroundTransparency = 1
-    img.ScaleType = Enum.ScaleType.Crop
-    img.ImageTransparency = 1
-    img.ZIndex = 4
-    img.Parent = imgHolder
-
     local imgFallback = Instance.new("TextLabel")
     imgFallback.Size = UDim2.fromScale(1, 1)
     imgFallback.BackgroundTransparency = 1
@@ -349,6 +350,14 @@ local function buildCard(entry, order)
     imgFallback.Text = entry.title
     imgFallback.ZIndex = 4
     imgFallback.Parent = imgHolder
+
+    local img = Instance.new("ImageLabel")
+    img.Size = UDim2.fromScale(1, 1)
+    img.BackgroundTransparency = 1
+    img.ScaleType = Enum.ScaleType.Crop
+    img.ImageTransparency = 0
+    img.ZIndex = 5
+    img.Parent = imgHolder
 
     local name = Instance.new("TextLabel")
     name.BackgroundTransparency = 1
@@ -431,10 +440,14 @@ local function buildCard(entry, order)
 
         if img.IsLoaded then
             imgFallback.Visible = false
-            TweenService:Create(img, TweenInfo.new(0.25), { ImageTransparency = 0 }):Play()
         else
-            imgFallback.Text = entry.title .. "\nimage did not render"
-            imgFallback.TextSize = 14
+            imgFallback.Text = entry.title .. "\nrendering..."
+            imgFallback.TextSize = 13
+            task.delay(4, function()
+                if img and img.Parent and img.IsLoaded then
+                    imgFallback.Visible = false
+                end
+            end)
         end
     end)
 
