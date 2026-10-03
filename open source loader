@@ -24,6 +24,7 @@ local SCRIPTS = {
         url      = "https://raw.githubusercontent.com/liamster7177/67/refs/heads/main/twd",
         image    = {
             "https://raw.githubusercontent.com/liamster7177/67/refs/heads/main/twd.png",
+            "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS1w4UJlykVRJ9En_D_aWnxLP7lDWvosEoI1bUDaFIv6g&s",
             "https://tr.rbxcdn.com/180DAY-c26f137c032045f17d2b2abce58d2f7e/500/280/Image/Jpeg/noFilter",
         },
         placeIds = { [128039018996175] = true },
@@ -36,6 +37,7 @@ local SCRIPTS = {
         url      = "https://raw.githubusercontent.com/liamster7177/67/refs/heads/main/ar2",
         image    = {
             "https://raw.githubusercontent.com/liamster7177/67/refs/heads/main/ar2.png",
+            "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR_02zzksWlYZWCY296cHywMdXrWIbMyU1Knh-hpv8mvw&s",
             "https://static.wikia.nocookie.net/roblox-apocalypse-rising/images/a/a3/Regular_thumbnail.png/revision/latest?cb=20231127010116",
         },
         placeIds = {},
@@ -66,6 +68,16 @@ end
 
 local imageCache = {}
 
+local function imageKind(data)
+    if type(data) ~= "string" or #data < 64 then return nil end
+    local b1, b2, b3, b4 = data:byte(1, 4)
+    if b1 == 137 and b2 == 80 and b3 == 78 and b4 == 71 then return ".png" end
+    if b1 == 255 and b2 == 216 then return ".jpg" end
+    if b1 == 71  and b2 == 73 and b3 == 70 then return ".png" end
+    if b1 == 82  and b2 == 73 and b3 == 70 and b4 == 70 then return ".png" end
+    return nil
+end
+
 local function resolveOne(spec, cacheName)
     if type(spec) ~= "string" or spec == "" then return nil, "no image set" end
 
@@ -84,17 +96,14 @@ local function resolveOne(spec, cacheName)
     if type(gca) ~= "function" then return nil, "no getcustomasset" end
     if type(writefile) ~= "function" then return nil, "no writefile" end
 
-    local ext = (spec:lower():find("%.png") and ".png") or ".jpg"
-    local file = "origin_loader_" .. cacheName .. ext
-
-    if type(isfile) == "function" then
-        local present = false
-        pcall(function() present = isfile(file) end)
-        if present then
-            local ok, asset = pcall(gca, file)
-            if ok and asset then
-                imageCache[cacheName] = asset
-                return asset
+    for _, ext in ipairs({ ".png", ".jpg" }) do
+        local cached = "origin_loader_" .. cacheName .. ext
+        if type(isfile) == "function" then
+            local present = false
+            pcall(function() present = isfile(cached) end)
+            if present then
+                local ok, asset = pcall(gca, cached)
+                if ok and asset then return asset end
             end
         end
     end
@@ -103,7 +112,11 @@ local function resolveOne(spec, cacheName)
     if not data then return nil, "download blocked" end
     if #data < 64 then return nil, "empty download" end
 
-    local okW, wErr = pcall(writefile, file, data)
+    local ext = imageKind(data)
+    if not ext then return nil, "not an image" end
+
+    local file = "origin_loader_" .. cacheName .. ext
+    local okW = pcall(writefile, file, data)
     if not okW then return nil, "writefile failed" end
 
     local ok, asset = pcall(gca, file)
