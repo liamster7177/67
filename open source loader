@@ -22,7 +22,10 @@ local SCRIPTS = {
         subtitle = "The Walking Dead Online",
         version  = "v56",
         url      = "https://raw.githubusercontent.com/liamster7177/67/refs/heads/main/twd",
-        image    = "https://tr.rbxcdn.com/180DAY-c26f137c032045f17d2b2abce58d2f7e/500/280/Image/Jpeg/noFilter",
+        image    = {
+            "https://raw.githubusercontent.com/liamster7177/67/refs/heads/main/twd.png",
+            "https://tr.rbxcdn.com/180DAY-c26f137c032045f17d2b2abce58d2f7e/500/280/Image/Jpeg/noFilter",
+        },
         placeIds = { [128039018996175] = true },
     },
     {
@@ -31,7 +34,10 @@ local SCRIPTS = {
         subtitle = "Apocalypse Rising 2",
         version  = "latest",
         url      = "https://raw.githubusercontent.com/liamster7177/67/refs/heads/main/ar2",
-        image    = "https://static.wikia.nocookie.net/roblox-apocalypse-rising/images/a/a3/Regular_thumbnail.png/revision/latest?cb=20231127010116",
+        image    = {
+            "https://raw.githubusercontent.com/liamster7177/67/refs/heads/main/ar2.png",
+            "https://static.wikia.nocookie.net/roblox-apocalypse-rising/images/a/a3/Regular_thumbnail.png/revision/latest?cb=20231127010116",
+        },
         placeIds = {},
     },
 }
@@ -60,9 +66,8 @@ end
 
 local imageCache = {}
 
-local function resolveImage(spec, cacheName)
-    if type(spec) ~= "string" or spec == "" then return nil end
-    if imageCache[cacheName] then return imageCache[cacheName] end
+local function resolveOne(spec, cacheName)
+    if type(spec) ~= "string" or spec == "" then return nil, "no image set" end
 
     if spec:match("^rbxassetid://") or spec:match("^rbxasset://") or spec:match("^rbxthumb://") then
         imageCache[cacheName] = spec
@@ -73,10 +78,11 @@ local function resolveImage(spec, cacheName)
         imageCache[cacheName] = a
         return a
     end
-    if not spec:match("^https?://") then return nil end
+    if not spec:match("^https?://") then return nil, "bad image value" end
 
     local gca = getcustomasset or getsynasset
-    if type(gca) ~= "function" or type(writefile) ~= "function" then return nil end
+    if type(gca) ~= "function" then return nil, "no getcustomasset" end
+    if type(writefile) ~= "function" then return nil, "no writefile" end
 
     local ext = (spec:lower():find("%.png") and ".png") or ".jpg"
     local file = "origin_loader_" .. cacheName .. ext
@@ -94,15 +100,37 @@ local function resolveImage(spec, cacheName)
     end
 
     local data = httpGetBinary(spec)
-    if not data or #data < 64 then return nil end
-    if not pcall(writefile, file, data) then return nil end
+    if not data then return nil, "download blocked" end
+    if #data < 64 then return nil, "empty download" end
+
+    local okW, wErr = pcall(writefile, file, data)
+    if not okW then return nil, "writefile failed" end
 
     local ok, asset = pcall(gca, file)
-    if ok and asset then
-        imageCache[cacheName] = asset
-        return asset
+    if not ok or not asset then return nil, "getcustomasset failed" end
+
+    return asset
+end
+
+local function resolveImage(spec, cacheName)
+    if imageCache[cacheName] then return imageCache[cacheName] end
+
+    local list = spec
+    if type(list) ~= "table" then list = { list } end
+
+    local lastWhy = "no image set"
+    for i, candidate in ipairs(list) do
+        local asset, why = resolveOne(candidate, cacheName .. "_" .. i)
+        if asset then
+            imageCache[cacheName] = asset
+            return asset
+        end
+        lastWhy = why or lastWhy
+        if why == "no getcustomasset" or why == "no writefile" then
+            return nil, why
+        end
     end
-    return nil
+    return nil, lastWhy
 end
 
 local host = (typeof(gethui) == "function" and gethui()) or game:GetService("CoreGui")
@@ -130,6 +158,7 @@ panel.Position = UDim2.fromScale(0.5, 0.5)
 panel.Size = UDim2.fromOffset(660, 430)
 panel.BackgroundColor3 = BG
 panel.BorderSizePixel = 0
+panel.Active = true
 panel.ZIndex = 2
 panel.Parent = gui
 
@@ -369,17 +398,30 @@ local function buildCard(entry, order)
     card.MouseButton1Click:Connect(function() runScript(entry) end)
 
     task.spawn(function()
-        local asset = resolveImage(entry.image, entry.key)
-        if not asset then return end
+        local asset, why = resolveImage(entry.image, entry.key)
+        if not asset then
+            imgFallback.Text = entry.title .. "\n" .. tostring(why or "image failed")
+            imgFallback.TextSize = 14
+            return
+        end
+
         img.Image = asset
-        local deadline = os.clock() + 5
+        pcall(function()
+            game:GetService("ContentProvider"):PreloadAsync({ img })
+        end)
+
+        local deadline = os.clock() + 6
         while os.clock() < deadline do
             if img.IsLoaded then break end
             task.wait(0.1)
         end
+
         if img.IsLoaded then
             imgFallback.Visible = false
             TweenService:Create(img, TweenInfo.new(0.25), { ImageTransparency = 0 }):Play()
+        else
+            imgFallback.Text = entry.title .. "\nimage did not render"
+            imgFallback.TextSize = 14
         end
     end)
 
@@ -396,6 +438,11 @@ for _, entry in ipairs(SCRIPTS) do
         say("detected " .. entry.subtitle .. " — " .. entry.title .. " recommended", ACCENT)
         break
     end
+end
+
+local function closeLoader()
+    pcall(function() gui:Destroy() end)
+    if getgenv then getgenv().__origin_loader_open = nil end
 end
 
 do
@@ -428,15 +475,21 @@ do
             dragging = false
         end
     end)
-end
 
-local function closeLoader()
-    pcall(function() gui:Destroy() end)
-    if getgenv then getgenv().__origin_loader_open = nil end
+    local dimArmed = false
+    dim.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dimArmed = not dragging
+        end
+    end)
+    dim.MouseButton1Click:Connect(function()
+        if dimArmed and not dragging then closeLoader() end
+        dimArmed = false
+    end)
 end
 
 close.MouseButton1Click:Connect(closeLoader)
-dim.MouseButton1Click:Connect(closeLoader)
 
 if getgenv then
     getgenv().__origin_loader_open = true
