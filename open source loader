@@ -1,0 +1,448 @@
+if getgenv and getgenv().__origin_loader_open then
+    pcall(getgenv().__origin_loader_close)
+end
+
+local Players       = game:GetService("Players")
+local UIS           = game:GetService("UserInputService")
+local TweenService  = game:GetService("TweenService")
+local LocalPlayer   = Players.LocalPlayer
+
+local ACCENT   = Color3.fromRGB(255, 140, 40)
+local BG       = Color3.fromRGB(13, 14, 18)
+local PANEL    = Color3.fromRGB(20, 22, 28)
+local CARD     = Color3.fromRGB(26, 29, 36)
+local CARD_HOV = Color3.fromRGB(34, 38, 47)
+local TEXT     = Color3.fromRGB(236, 238, 243)
+local DIM      = Color3.fromRGB(150, 156, 168)
+
+local SCRIPTS = {
+    {
+        key      = "twd",
+        title    = "TWD ONLINE",
+        subtitle = "The Walking Dead Online",
+        version  = "v56",
+        url      = "https://raw.githubusercontent.com/liamster7177/67/refs/heads/main/twd",
+        image    = "https://tr.rbxcdn.com/180DAY-c26f137c032045f17d2b2abce58d2f7e/500/280/Image/Jpeg/noFilter",
+        placeIds = { [128039018996175] = true },
+    },
+    {
+        key      = "ar2",
+        title    = "AR2",
+        subtitle = "Apocalypse Rising 2",
+        version  = "latest",
+        url      = "https://raw.githubusercontent.com/liamster7177/67/refs/heads/main/ar2",
+        image    = "https://static.wikia.nocookie.net/roblox-apocalypse-rising/images/a/a3/Regular_thumbnail.png/revision/latest?cb=20231127010116",
+        placeIds = {},
+    },
+}
+
+local function httpGetBinary(url)
+    local body
+    local req = (syn and syn.request) or (http and http.request) or http_request or request
+    if req then
+        local ok, res = pcall(req, { Url = url, Method = "GET" })
+        if ok and type(res) == "table" and type(res.Body) == "string" and #res.Body > 0 then
+            if res.StatusCode == nil or res.StatusCode == 200 or res.Success then
+                body = res.Body
+            end
+        end
+    end
+    if not body then
+        local ok, res = pcall(function() return game:HttpGet(url, true) end)
+        if ok and type(res) == "string" and #res > 0 then body = res end
+    end
+    if not body then
+        local ok, res = pcall(function() return game:HttpGet(url) end)
+        if ok and type(res) == "string" and #res > 0 then body = res end
+    end
+    return body
+end
+
+local imageCache = {}
+
+local function resolveImage(spec, cacheName)
+    if type(spec) ~= "string" or spec == "" then return nil end
+    if imageCache[cacheName] then return imageCache[cacheName] end
+
+    if spec:match("^rbxassetid://") or spec:match("^rbxasset://") or spec:match("^rbxthumb://") then
+        imageCache[cacheName] = spec
+        return spec
+    end
+    if spec:match("^%d+$") then
+        local a = "rbxassetid://" .. spec
+        imageCache[cacheName] = a
+        return a
+    end
+    if not spec:match("^https?://") then return nil end
+
+    local gca = getcustomasset or getsynasset
+    if type(gca) ~= "function" or type(writefile) ~= "function" then return nil end
+
+    local ext = (spec:lower():find("%.png") and ".png") or ".jpg"
+    local file = "origin_loader_" .. cacheName .. ext
+
+    if type(isfile) == "function" then
+        local present = false
+        pcall(function() present = isfile(file) end)
+        if present then
+            local ok, asset = pcall(gca, file)
+            if ok and asset then
+                imageCache[cacheName] = asset
+                return asset
+            end
+        end
+    end
+
+    local data = httpGetBinary(spec)
+    if not data or #data < 64 then return nil end
+    if not pcall(writefile, file, data) then return nil end
+
+    local ok, asset = pcall(gca, file)
+    if ok and asset then
+        imageCache[cacheName] = asset
+        return asset
+    end
+    return nil
+end
+
+local host = (typeof(gethui) == "function" and gethui()) or game:GetService("CoreGui")
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "origin_loader"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.DisplayOrder = 1000000
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = host
+
+local dim = Instance.new("TextButton")
+dim.Size = UDim2.fromScale(1, 1)
+dim.BackgroundColor3 = Color3.new(0, 0, 0)
+dim.BackgroundTransparency = 0.45
+dim.AutoButtonColor = false
+dim.Text = ""
+dim.ZIndex = 1
+dim.Parent = gui
+
+local panel = Instance.new("Frame")
+panel.AnchorPoint = Vector2.new(0.5, 0.5)
+panel.Position = UDim2.fromScale(0.5, 0.5)
+panel.Size = UDim2.fromOffset(660, 430)
+panel.BackgroundColor3 = BG
+panel.BorderSizePixel = 0
+panel.ZIndex = 2
+panel.Parent = gui
+
+local pc = Instance.new("UICorner") pc.CornerRadius = UDim.new(0, 12) pc.Parent = panel
+local ps = Instance.new("UIStroke")
+ps.Color = Color3.fromRGB(44, 48, 58)
+ps.Thickness = 1
+ps.Transparency = 0.3
+ps.Parent = panel
+
+local title = Instance.new("TextLabel")
+title.BackgroundTransparency = 1
+title.Position = UDim2.fromOffset(24, 18)
+title.Size = UDim2.new(1, -120, 0, 26)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 20
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.TextColor3 = TEXT
+title.Text = "ORIGIN HUB"
+title.ZIndex = 3
+title.Parent = panel
+
+local accentDot = Instance.new("Frame")
+accentDot.Position = UDim2.fromOffset(24, 46)
+accentDot.Size = UDim2.fromOffset(34, 3)
+accentDot.BackgroundColor3 = ACCENT
+accentDot.BorderSizePixel = 0
+accentDot.ZIndex = 3
+accentDot.Parent = panel
+local adc = Instance.new("UICorner") adc.CornerRadius = UDim.new(1, 0) adc.Parent = accentDot
+
+local sub = Instance.new("TextLabel")
+sub.BackgroundTransparency = 1
+sub.Position = UDim2.fromOffset(24, 56)
+sub.Size = UDim2.new(1, -120, 0, 18)
+sub.Font = Enum.Font.Gotham
+sub.TextSize = 12
+sub.TextXAlignment = Enum.TextXAlignment.Left
+sub.TextColor3 = DIM
+sub.Text = "Pick a game to load"
+sub.ZIndex = 3
+sub.Parent = panel
+
+local close = Instance.new("TextButton")
+close.Size = UDim2.fromOffset(30, 26)
+close.Position = UDim2.new(1, -44, 0, 18)
+close.BackgroundColor3 = Color3.fromRGB(38, 41, 50)
+close.Text = "X"
+close.Font = Enum.Font.GothamBold
+close.TextSize = 13
+close.TextColor3 = Color3.fromRGB(232, 124, 124)
+close.BorderSizePixel = 0
+close.AutoButtonColor = false
+close.ZIndex = 3
+close.Parent = panel
+local cc = Instance.new("UICorner") cc.CornerRadius = UDim.new(0, 6) cc.Parent = close
+
+local status = Instance.new("TextLabel")
+status.BackgroundTransparency = 1
+status.Position = UDim2.fromOffset(24, 0)
+status.Size = UDim2.new(1, -48, 0, 20)
+status.AnchorPoint = Vector2.new(0, 1)
+status.Position = UDim2.new(0, 24, 1, -16)
+status.Font = Enum.Font.Gotham
+status.TextSize = 12
+status.TextXAlignment = Enum.TextXAlignment.Left
+status.TextColor3 = DIM
+status.Text = "ready"
+status.ZIndex = 3
+status.Parent = panel
+
+local function say(msg, color)
+    status.Text = tostring(msg)
+    status.TextColor3 = color or DIM
+end
+
+local holder = Instance.new("Frame")
+holder.BackgroundTransparency = 1
+holder.Position = UDim2.fromOffset(24, 90)
+holder.Size = UDim2.new(1, -48, 0, 282)
+holder.ZIndex = 3
+holder.Parent = panel
+
+local grid = Instance.new("UIListLayout")
+grid.FillDirection = Enum.FillDirection.Horizontal
+grid.Padding = UDim.new(0, 18)
+grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+grid.VerticalAlignment = Enum.VerticalAlignment.Top
+grid.SortOrder = Enum.SortOrder.LayoutOrder
+grid.Parent = holder
+
+local busy = false
+
+local function runScript(entry)
+    if busy then return end
+    busy = true
+    say("downloading " .. entry.title .. " ...", ACCENT)
+
+    task.spawn(function()
+        local okGet, source = pcall(function() return game:HttpGet(entry.url, true) end)
+        if not okGet or type(source) ~= "string" or #source < 100 then
+            say("download failed — check your connection", Color3.fromRGB(235, 120, 120))
+            busy = false
+            return
+        end
+
+        say("compiling " .. entry.title .. " ...", ACCENT)
+        local fn, compileErr = loadstring(source)
+        if not fn then
+            say("compile error: " .. tostring(compileErr), Color3.fromRGB(235, 120, 120))
+            busy = false
+            return
+        end
+
+        say("running " .. entry.title .. " ...", ACCENT)
+        gui.Enabled = false
+
+        local okRun, runErr = pcall(fn)
+        if not okRun then
+            gui.Enabled = true
+            say("runtime error: " .. tostring(runErr), Color3.fromRGB(235, 120, 120))
+            busy = false
+            return
+        end
+
+        task.wait(0.4)
+        pcall(function() gui:Destroy() end)
+        if getgenv then getgenv().__origin_loader_open = nil end
+    end)
+end
+
+local function buildCard(entry, order)
+    local card = Instance.new("TextButton")
+    card.Name = entry.key
+    card.LayoutOrder = order
+    card.Size = UDim2.fromOffset(292, 282)
+    card.BackgroundColor3 = CARD
+    card.BorderSizePixel = 0
+    card.AutoButtonColor = false
+    card.Text = ""
+    card.ZIndex = 3
+    card.Parent = holder
+
+    local crn = Instance.new("UICorner") crn.CornerRadius = UDim.new(0, 10) crn.Parent = card
+    local strk = Instance.new("UIStroke")
+    strk.Color = Color3.fromRGB(48, 52, 64)
+    strk.Thickness = 1
+    strk.Transparency = 0.35
+    strk.Parent = card
+
+    local imgHolder = Instance.new("Frame")
+    imgHolder.Position = UDim2.fromOffset(10, 10)
+    imgHolder.Size = UDim2.fromOffset(272, 153)
+    imgHolder.BackgroundColor3 = Color3.fromRGB(16, 18, 23)
+    imgHolder.BorderSizePixel = 0
+    imgHolder.ClipsDescendants = true
+    imgHolder.ZIndex = 4
+    imgHolder.Parent = card
+    local ic = Instance.new("UICorner") ic.CornerRadius = UDim.new(0, 7) ic.Parent = imgHolder
+
+    local img = Instance.new("ImageLabel")
+    img.Size = UDim2.fromScale(1, 1)
+    img.BackgroundTransparency = 1
+    img.ScaleType = Enum.ScaleType.Crop
+    img.ImageTransparency = 1
+    img.ZIndex = 4
+    img.Parent = imgHolder
+
+    local imgFallback = Instance.new("TextLabel")
+    imgFallback.Size = UDim2.fromScale(1, 1)
+    imgFallback.BackgroundTransparency = 1
+    imgFallback.Font = Enum.Font.GothamBold
+    imgFallback.TextSize = 22
+    imgFallback.TextColor3 = Color3.fromRGB(70, 76, 90)
+    imgFallback.Text = entry.title
+    imgFallback.ZIndex = 4
+    imgFallback.Parent = imgHolder
+
+    local name = Instance.new("TextLabel")
+    name.BackgroundTransparency = 1
+    name.Position = UDim2.fromOffset(14, 174)
+    name.Size = UDim2.new(1, -28, 0, 22)
+    name.Font = Enum.Font.GothamBold
+    name.TextSize = 17
+    name.TextXAlignment = Enum.TextXAlignment.Left
+    name.TextColor3 = TEXT
+    name.Text = entry.title
+    name.ZIndex = 4
+    name.Parent = card
+
+    local desc = Instance.new("TextLabel")
+    desc.BackgroundTransparency = 1
+    desc.Position = UDim2.fromOffset(14, 196)
+    desc.Size = UDim2.new(1, -28, 0, 18)
+    desc.Font = Enum.Font.Gotham
+    desc.TextSize = 12
+    desc.TextXAlignment = Enum.TextXAlignment.Left
+    desc.TextColor3 = DIM
+    desc.Text = entry.subtitle
+    desc.ZIndex = 4
+    desc.Parent = card
+
+    local badge = Instance.new("TextLabel")
+    badge.BackgroundColor3 = Color3.fromRGB(38, 42, 52)
+    badge.Position = UDim2.fromOffset(14, 222)
+    badge.Size = UDim2.fromOffset(62, 20)
+    badge.Font = Enum.Font.GothamBold
+    badge.TextSize = 11
+    badge.TextColor3 = ACCENT
+    badge.Text = entry.version
+    badge.BorderSizePixel = 0
+    badge.ZIndex = 4
+    badge.Parent = card
+    local bc = Instance.new("UICorner") bc.CornerRadius = UDim.new(0, 5) bc.Parent = badge
+
+    local loadBtn = Instance.new("TextLabel")
+    loadBtn.BackgroundColor3 = ACCENT
+    loadBtn.Position = UDim2.fromOffset(14, 250)
+    loadBtn.Size = UDim2.new(1, -28, 0, 22)
+    loadBtn.Font = Enum.Font.GothamBold
+    loadBtn.TextSize = 12
+    loadBtn.TextColor3 = Color3.fromRGB(18, 14, 8)
+    loadBtn.Text = "LOAD"
+    loadBtn.BorderSizePixel = 0
+    loadBtn.ZIndex = 4
+    loadBtn.Parent = card
+    local lc = Instance.new("UICorner") lc.CornerRadius = UDim.new(0, 6) lc.Parent = loadBtn
+
+    card.MouseEnter:Connect(function()
+        TweenService:Create(card, TweenInfo.new(0.15), { BackgroundColor3 = CARD_HOV }):Play()
+        TweenService:Create(strk, TweenInfo.new(0.15), { Color = ACCENT, Transparency = 0.15 }):Play()
+    end)
+    card.MouseLeave:Connect(function()
+        TweenService:Create(card, TweenInfo.new(0.15), { BackgroundColor3 = CARD }):Play()
+        TweenService:Create(strk, TweenInfo.new(0.15), { Color = Color3.fromRGB(48, 52, 64), Transparency = 0.35 }):Play()
+    end)
+    card.MouseButton1Click:Connect(function() runScript(entry) end)
+
+    task.spawn(function()
+        local asset = resolveImage(entry.image, entry.key)
+        if not asset then return end
+        img.Image = asset
+        local deadline = os.clock() + 5
+        while os.clock() < deadline do
+            if img.IsLoaded then break end
+            task.wait(0.1)
+        end
+        if img.IsLoaded then
+            imgFallback.Visible = false
+            TweenService:Create(img, TweenInfo.new(0.25), { ImageTransparency = 0 }):Play()
+        end
+    end)
+
+    return card
+end
+
+for i, entry in ipairs(SCRIPTS) do
+    buildCard(entry, i)
+end
+
+local currentPlace = game.PlaceId
+for _, entry in ipairs(SCRIPTS) do
+    if entry.placeIds and entry.placeIds[currentPlace] then
+        say("detected " .. entry.subtitle .. " — " .. entry.title .. " recommended", ACCENT)
+        break
+    end
+end
+
+do
+    local dragging, dragStart, startPos = false, nil, nil
+    local function begin(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = panel.Position
+        end
+    end
+    title.InputBegan:Connect(begin)
+    sub.InputBegan:Connect(begin)
+    panel.InputBegan:Connect(begin)
+
+    UIS.InputChanged:Connect(function(input)
+        if not dragging then return end
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+        or input.UserInputType == Enum.UserInputType.Touch then
+            local delta = input.Position - dragStart
+            panel.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + delta.X,
+                startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+    UIS.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+end
+
+local function closeLoader()
+    pcall(function() gui:Destroy() end)
+    if getgenv then getgenv().__origin_loader_open = nil end
+end
+
+close.MouseButton1Click:Connect(closeLoader)
+dim.MouseButton1Click:Connect(closeLoader)
+
+if getgenv then
+    getgenv().__origin_loader_open = true
+    getgenv().__origin_loader_close = closeLoader
+end
+
+panel.Size = UDim2.fromOffset(660, 400)
+TweenService:Create(panel, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+    { Size = UDim2.fromOffset(660, 430) }):Play()
