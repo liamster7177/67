@@ -1,0 +1,1332 @@
+-- yo idk if ts finna ban u lol it banned me a few times uhh ill fix later --
+local Library      = loadstring(game:HttpGet("https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/Library.lua"))()
+local ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/addons/ThemeManager.lua"))()
+local SaveManager  = loadstring(game:HttpGet("https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/addons/SaveManager.lua"))()
+
+local Players  = game:GetService("Players")
+local RS       = game:GetService("ReplicatedStorage")
+local RunSvc   = game:GetService("RunService")
+local UIS      = game:GetService("UserInputService")
+local VIM      = game:GetService("VirtualInputManager")
+local Lighting = game:GetService("Lighting")
+local LP       = Players.LocalPlayer
+
+local Options = Library.Options
+local Toggles = Library.Toggles
+
+
+local S = {
+    SilentAim = false, SilentFOV = 300, SilentTargetPart = "Head", Wallbang = false,
+    RageBot = false, RageMode = "Gun", RageDelay = 0.1, RageTeamCheck = true,
+    MeleeAura = false, MeleeRange = 4, MeleeTeamCheck = false, MeleeIgnoreFriends = false,
+    ArrestAura = false, ArrestRange = 7.5,
+    NoSpread = false, LongRange = false, FastFire = false, FireRate = 0.05,
+    FastReload = false, AutoReload = false,
+    AntiTase = false,
+    TracersOn = false, TracerColor = Color3.fromRGB(120,220,255),
+    TracerThickness = 2, TracerLife = 0.5,
+    EspOn = false, EspBox = true, EspName = true, EspDist = true, EspHealth = true,
+    EspSkeleton = false, EspMaxDist = 2000, EspTeamCheck = true,
+    EspEnemyColor = Color3.fromRGB(255,80,80), EspTeamColor = Color3.fromRGB(90,200,255),
+    Fly = false, FlySpeed = 80,
+    Speed = false, SpeedVal = 60,
+    Jump = false, JumpVal = 120,
+    InfJump = false,
+    NoClip = false,
+    Fullbright = false, NoFog = false,
+    TimeOn = false, TimeValue = 14,
+    Brightness = false, BrightnessVal = 3,
+    Ambient = false, AmbientColor = Color3.fromRGB(180,180,180),
+    Skybox = "Default",
+    PlayerChams = false, PlayerChamsColor = Color3.fromRGB(255,120,255),
+    PlayerChamsMat = "ForceField", PlayerChamsTrans = 0.5,
+    GunChams = false, GunChamsColor = Color3.fromRGB(255,140,30), GunChamsMat = "Neon",
+}
+
+
+local function myChar() return LP.Character end
+local function myHum() local c = myChar(); return c and c:FindFirstChildOfClass("Humanoid") end
+local function myHrp() local c = myChar(); return c and c:FindFirstChild("HumanoidRootPart") end
+local function hrpOf(p) local c = p and p.Character; return c and c:FindFirstChild("HumanoidRootPart") end
+local function humOf(p) local c = p and p.Character; return c and c:FindFirstChildOfClass("Humanoid") end
+local function alive(p) local h = humOf(p); return h and h.Health > 0 and hrpOf(p) ~= nil end
+local function sameTeam(p)
+    if not S.EspTeamCheck then return false end
+    local t = LP.Team
+    return t ~= nil and p.Team == t
+end
+local function isEnemy(p)
+    return p ~= LP and alive(p) and not sameTeam(p)
+end
+local function isFriend(p)
+    local ok, v = pcall(function() return LP:IsFriendsWith(p.UserId) end)
+    return ok and v
+end
+
+
+local silentPart, silentTarget = nil, nil
+local castRayOriginal = nil     
+local castRayActive   = false
+
+local fovCircle = Drawing.new("Circle")
+fovCircle.Thickness = 2
+fovCircle.Color = Color3.fromRGB(255, 120, 220)
+fovCircle.NumSides = 64
+fovCircle.Filled = false
+fovCircle.Visible = false
+
+local function pickSilentTarget()
+    local cam = workspace.CurrentCamera
+    if not cam then return nil, nil end
+    local vp = cam.ViewportSize
+    local center = Vector2.new(vp.X/2, vp.Y/2)
+    local best, bestScore, bestPart = nil, math.huge, nil
+    for _, p in ipairs(Players:GetPlayers()) do
+        if isEnemy(p) then
+            local c = p.Character
+            local part = c:FindFirstChild(S.SilentTargetPart)
+                or c:FindFirstChild("Head")
+                or c:FindFirstChild("Torso")
+                or c:FindFirstChild("HumanoidRootPart")
+            if part then
+                local sp, on = cam:WorldToViewportPoint(part.Position)
+                if on and sp.Z > 0 then
+                    local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
+                    if d < S.SilentFOV and d < bestScore then
+                        bestScore, best, bestPart = d, p, part
+                    end
+                end
+            end
+        end
+    end
+    return best, bestPart
+end
+
+local function installCastRay()
+    if castRayActive then return true end
+    if not filtergc or not hookfunction then
+        warn("[Origin] filtergc or hookfunction unavailable")
+        return false
+    end
+    local ok, fn = pcall(filtergc, "function", { Name = "castRay" }, true)
+    if not ok or type(fn) ~= "function" then
+        warn("[Origin] castRay not found")
+        return false
+    end
+    castRayOriginal = fn   
+    local function hooked(...)
+        local args = table.pack(...)
+        
+        if S.SilentAim and silentPart and silentPart.Parent then
+            if S.Wallbang then
+                return silentPart, silentPart.Position
+            end
+            if args[1] and typeof(args[1]) == "Vector3" then
+                args[2] = silentPart.Position
+            end
+        end
+        return castRayOriginal(table.unpack(args, 1, args.n))
+    end
+    hookfunction(fn, hooked)
+    castRayActive = true
+    return true
+end
+
+local function uninstallCastRay()
+    if not castRayActive or not castRayOriginal then return end
+    -- reinstall original by hooking back
+    pcall(function()
+        local cur = castRayOriginal
+        -- find current hooked version by re-running filtergc
+        local ok, fn = pcall(filtergc, "function", { Name = "castRay" }, true)
+        if ok and type(fn) == "function" then
+            hookfunction(fn, castRayOriginal)
+        end
+    end)
+    castRayActive = false
+end
+
+
+RunSvc.RenderStepped:Connect(function()
+    
+    fovCircle.Visible = S.SilentAim
+
+    if not S.SilentAim and not S.RageBot then
+        silentTarget, silentPart = nil, nil
+        return
+    end
+
+    local cam = workspace.CurrentCamera
+    if cam then
+        fovCircle.Position = cam.ViewportSize / 2
+        fovCircle.Radius = S.SilentFOV
+    end
+
+    if S.SilentAim and not S.RageBot then
+        silentTarget, silentPart = pickSilentTarget()
+    end
+end)
+
+
+local meleeRemote = RS:FindFirstChild("meleeEvent")
+local rageBusy = false
+
+local function fireGunOnce()
+    local vp = workspace.CurrentCamera.ViewportSize
+    pcall(function()
+        VIM:SendMouseButtonEvent(vp.X/2, vp.Y/2, 0, true, game, 1)
+        task.wait(0.02)
+        VIM:SendMouseButtonEvent(vp.X/2, vp.Y/2, 0, false, game, 1)
+    end)
+end
+
+RunSvc.Heartbeat:Connect(function()
+    -- strict gate: do nothing unless Ragebot is on
+    if not S.RageBot then return end
+    if rageBusy then return end
+    rageBusy = true
+    task.spawn(function()
+        while S.RageBot do
+            local any = false
+            for _, p in ipairs(Players:GetPlayers()) do
+                if not S.RageBot then break end
+                local useTeam = S.RageTeamCheck
+                if p ~= LP and alive(p) and (not useTeam or not sameTeam(p)) then
+                    any = true
+                    local c = p.Character
+                    local part = c:FindFirstChild("Head")
+                        or c:FindFirstChild("Torso")
+                        or c:FindFirstChild("HumanoidRootPart")
+                    if part then
+                        silentTarget, silentPart = p, part
+                        if S.RageMode == "TP + Melee" then
+                            local t = hrpOf(p); local h = myHrp()
+                            if t and h then
+                                pcall(function()
+                                    h.CFrame = CFrame.lookAt(
+                                        t.Position - t.CFrame.LookVector * 3 + Vector3.new(0,2,0),
+                                        t.Position)
+                                end)
+                                task.wait(0.03)
+                                if meleeRemote then
+                                    pcall(function() meleeRemote:FireServer(p) end)
+                                end
+                            end
+                        else
+                            local cam = workspace.CurrentCamera
+                            if cam then
+                                cam.CFrame = CFrame.new(cam.CFrame.Position, part.Position)
+                                task.wait(0.02)
+                                fireGunOnce()
+                            end
+                        end
+                        task.wait(S.RageDelay)
+                    end
+                end
+            end
+            if not any then task.wait(0.2) end
+        end
+        rageBusy = false
+    end)
+end)
+
+
+RunSvc.Heartbeat:Connect(function()
+    if not S.MeleeAura or not meleeRemote then return end
+    local h = myHrp(); if not h then return end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LP and alive(p) then
+            if not (S.MeleeTeamCheck and sameTeam(p)) then
+                if not (S.MeleeIgnoreFriends and isFriend(p)) then
+                    local t = hrpOf(p)
+                    if t and (h.Position - t.Position).Magnitude <= S.MeleeRange then
+                        pcall(function() meleeRemote:FireServer(p) end)
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- ============================================================================
+-- ARREST AURA
+-- ============================================================================
+local arrestRemote = RS:FindFirstChild("Remotes") and RS.Remotes:FindFirstChild("ArrestPlayer")
+
+local function isArrestable(p)
+    if not p.Character then return false end
+    local hum = humOf(p)
+    if not hum or hum.Health <= 0 then return false end
+    if p.Team and p.Team.Name == "Criminals" then return true end
+    if hum.DisplayName and (hum.DisplayName:find("🔗",1,true) or hum.DisplayName:find("💢",1,true)) then
+        return true
+    end
+    return false
+end
+
+RunSvc.Heartbeat:Connect(function()
+    if not S.ArrestAura or not arrestRemote then return end
+    local h = myHrp(); if not h then return end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LP and p.Character and isArrestable(p) then
+            local t = hrpOf(p)
+            if t and (h.Position - t.Position).Magnitude <= S.ArrestRange then
+                pcall(function() arrestRemote:InvokeServer(p) end)
+            end
+        end
+    end
+end)
+
+
+local weaponOrigAttrs = setmetatable({}, { __mode = "k" })
+
+local function saveAttr(tool, attr)
+    weaponOrigAttrs[tool] = weaponOrigAttrs[tool] or {}
+    if weaponOrigAttrs[tool][attr] == nil then
+        weaponOrigAttrs[tool][attr] = tool:GetAttribute(attr)
+    end
+end
+local function revertAttr(tool, attr)
+    if weaponOrigAttrs[tool] and weaponOrigAttrs[tool][attr] ~= nil then
+        pcall(function() tool:SetAttribute(attr, weaponOrigAttrs[tool][attr]) end)
+        weaponOrigAttrs[tool][attr] = nil
+    end
+end
+
+RunSvc.Heartbeat:Connect(function()
+    -- strict gate: nothing to do if all weapon mods are off
+    if not (S.NoSpread or S.LongRange or S.FastFire or S.FastReload) then
+        -- restore any prior modifications
+        for tool, attrs in pairs(weaponOrigAttrs) do
+            for attr, orig in pairs(attrs) do
+                if tool and tool.Parent and orig ~= nil then
+                    pcall(function() tool:SetAttribute(attr, orig) end)
+                end
+            end
+        end
+        weaponOrigAttrs = setmetatable({}, { __mode = "k" })
+        return
+    end
+
+    local char = myChar()
+    local backpack = LP:FindFirstChild("Backpack")
+    local tools = {}
+    if char then for _, t in ipairs(char:GetChildren()) do
+        if t:IsA("Tool") then tools[#tools+1] = t end
+    end end
+    if backpack then for _, t in ipairs(backpack:GetChildren()) do
+        if t:IsA("Tool") then tools[#tools+1] = t end
+    end end
+
+    for _, tool in ipairs(tools) do
+        if tool:GetAttribute("SpreadRadius") ~= nil then
+            if S.NoSpread then
+                saveAttr(tool, "SpreadRadius")
+                pcall(function() tool:SetAttribute("SpreadRadius", 0) end)
+            else
+                revertAttr(tool, "SpreadRadius")
+            end
+        end
+        if tool:GetAttribute("FireRate") ~= nil then
+            if S.FastFire then
+                saveAttr(tool, "FireRate")
+                pcall(function() tool:SetAttribute("FireRate", S.FireRate) end)
+            else
+                revertAttr(tool, "FireRate")
+            end
+        end
+        if tool:GetAttribute("ReloadTime") ~= nil then
+            if S.FastReload then
+                saveAttr(tool, "ReloadTime")
+                pcall(function() tool:SetAttribute("ReloadTime", 0.15) end)
+            else
+                revertAttr(tool, "ReloadTime")
+            end
+        end
+        if tool:GetAttribute("Range") ~= nil then
+            if S.LongRange then
+                saveAttr(tool, "Range")
+                pcall(function() tool:SetAttribute("Range", 9999) end)
+            else
+                revertAttr(tool, "Range")
+            end
+        end
+    end
+end)
+
+
+local lastReloadAttempt = 0
+RunSvc.Heartbeat:Connect(function()
+    if not S.AutoReload then return end
+    local now = os.clock()
+    if now - lastReloadAttempt < 0.3 then return end
+    local char = myChar(); if not char then return end
+    for _, t in ipairs(char:GetChildren()) do
+        if t:IsA("Tool") then
+            local cur = t:GetAttribute("CurrentAmmo")
+            local max = t:GetAttribute("MaxAmmo")
+            local rel = t:GetAttribute("IsReloading")
+            if type(cur) == "number" and type(max) == "number" and max > 1
+               and cur <= 1 and not rel then
+                lastReloadAttempt = now
+                pcall(function()
+                    VIM:SendKeyEvent(true,  Enum.KeyCode.R, false, game)
+                    task.wait(0.04)
+                    VIM:SendKeyEvent(false, Enum.KeyCode.R, false, game)
+                end)
+                return
+            end
+        end
+    end
+end)
+
+
+local collisionDestroyed = false
+local function setNoClip(on)
+    if on then
+        if not collisionDestroyed then
+            local cc = RS:FindFirstChild("Scripts")
+                and RS.Scripts:FindFirstChild("CharacterCollision")
+            if cc then
+                pcall(function() cc:Destroy() end)
+                collisionDestroyed = true
+                print("[Origin] CharacterCollision destroyed -- noclip active")
+            end
+        end
+    else
+        if collisionDestroyed then
+            warn("[Origin] noclip off -- rejoin to fully restore collision")
+        end
+    end
+end
+
+
+local taseRemote = RS:FindFirstChild("GunRemotes") and RS.GunRemotes:FindFirstChild("PlayerTased")
+local taseDisabledConns = {}
+
+local function setAntiTase(on)
+    if not taseRemote then return end
+    if on then
+        for _, c in ipairs(getconnections(taseRemote.OnClientEvent)) do
+            c:Disable()
+            taseDisabledConns[#taseDisabledConns+1] = c
+        end
+    else
+        for _, c in ipairs(taseDisabledConns) do pcall(function() c:Enable() end) end
+        taseDisabledConns = {}
+    end
+end
+
+local flyBV, flyBG, flyConn
+local function stopFly()
+    if flyConn then flyConn:Disconnect(); flyConn = nil end
+    if flyBV then pcall(function() flyBV:Destroy() end); flyBV = nil end
+    if flyBG then pcall(function() flyBG:Destroy() end); flyBG = nil end
+    local h = myHum(); if h then pcall(function() h.PlatformStand = false end) end
+end
+
+local function startFly()
+    local hrp, hum = myHrp(), myHum()
+    if not hrp or not hum then return end
+    stopFly()
+    flyBV = Instance.new("BodyVelocity")
+    flyBV.MaxForce = Vector3.new(1e6,1e6,1e6)
+    flyBV.P = 1250
+    flyBV.Velocity = Vector3.zero
+    flyBV.Parent = hrp
+    flyBG = Instance.new("BodyGyro")
+    flyBG.MaxTorque = Vector3.new(1e6,1e6,1e6)
+    flyBG.P, flyBG.D = 3000, 500
+    flyBG.CFrame = hrp.CFrame
+    flyBG.Parent = hrp
+    pcall(function() hum.PlatformStand = true end)
+    flyConn = RunSvc.RenderStepped:Connect(function()
+        if not S.Fly then stopFly() return end
+        local h2 = myHrp()
+        if not h2 or not flyBV or not flyBV.Parent then stopFly() return end
+        local cf = workspace.CurrentCamera.CFrame
+        local dir = Vector3.zero
+        if UIS:IsKeyDown(Enum.KeyCode.W) then dir = dir + cf.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then dir = dir - cf.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then dir = dir + cf.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then dir = dir - cf.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) then dir = dir + Vector3.new(0,1,0) end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then dir = dir - Vector3.new(0,1,0) end
+        flyBV.Velocity = (dir.Magnitude > 0.01) and (dir.Unit * S.FlySpeed) or Vector3.zero
+        flyBG.CFrame = CFrame.new(h2.Position,
+            h2.Position + Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z))
+    end)
+end
+
+RunSvc.Heartbeat:Connect(function()
+    if not (S.Speed or S.Jump) then return end
+    local h = myHum(); if not h then return end
+    if S.Speed and h.WalkSpeed ~= S.SpeedVal then h.WalkSpeed = S.SpeedVal end
+    if S.Jump then
+        h.UseJumpPower = true
+        if h.JumpPower ~= S.JumpVal then h.JumpPower = S.JumpVal end
+    end
+end)
+
+UIS.JumpRequest:Connect(function()
+    if not S.InfJump then return end
+    local h = myHum()
+    if h then pcall(function() h:ChangeState(Enum.HumanoidStateType.Jumping) end) end
+end)
+
+
+local tracerFolder = Instance.new("Folder")
+tracerFolder.Name = "Origin_Tracers"
+tracerFolder.Parent = workspace
+local activeTracers = {}
+
+local function makeTracer(from, to)
+    if typeof(from) ~= "Vector3" or typeof(to) ~= "Vector3" then return end
+    local near = Instance.new("Attachment", workspace.Terrain)
+    local far  = Instance.new("Attachment", workspace.Terrain)
+    near.Position = from
+    far.Position = to
+    local beam = Instance.new("Beam")
+    beam.Attachment0 = near
+    beam.Attachment1 = far
+    beam.FaceCamera = true
+    beam.LightInfluence = 0
+    beam.Width0 = S.TracerThickness
+    beam.Width1 = S.TracerThickness
+    beam.Color = ColorSequence.new(S.TracerColor)
+    beam.LightEmission = 1
+    beam.Parent = tracerFolder
+    activeTracers[#activeTracers+1] = {
+        beam = beam, near = near, far = far,
+        born = os.clock(), life = S.TracerLife,
+    }
+end
+
+RunSvc.RenderStepped:Connect(function()
+    if #activeTracers == 0 then return end
+    local now = os.clock()
+    for i = #activeTracers, 1, -1 do
+        local t = activeTracers[i]
+        local age = now - t.born
+        if age >= t.life then
+            pcall(function() t.beam:Destroy() t.near:Destroy() t.far:Destroy() end)
+            table.remove(activeTracers, i)
+        else
+            t.beam.Transparency = NumberSequence.new(1 - age / t.life)
+        end
+    end
+end)
+
+
+local espPool = {}
+local function getEsp(i)
+    local e = espPool[i]
+    if e then return e end
+    local box = Drawing.new("Square")
+    box.Thickness, box.Filled, box.Visible = 1, false, false
+    local outline = Drawing.new("Square")
+    outline.Thickness, outline.Filled, outline.Visible, outline.Color = 3, false, false, Color3.new(0,0,0)
+    local name = Drawing.new("Text")
+    name.Size, name.Center, name.Outline, name.Visible = 13, true, true, false
+    local dist = Drawing.new("Text")
+    dist.Size, dist.Center, dist.Outline, dist.Visible = 12, true, true, false
+    local hpBg = Drawing.new("Square")
+    hpBg.Filled, hpBg.Color, hpBg.Visible = true, Color3.fromRGB(15,15,15), false
+    local hpFill = Drawing.new("Square")
+    hpFill.Filled, hpFill.Visible = true, false
+    local skeleton = {}
+    for k = 1, 6 do
+        local l = Drawing.new("Line")
+        l.Thickness, l.Visible = 1, false
+        skeleton[k] = l
+    end
+    e = { box=box, outline=outline, name=name, dist=dist, hpBg=hpBg, hpFill=hpFill, skeleton=skeleton }
+    espPool[i] = e
+    return e
+end
+local function hideEsp(e)
+    e.box.Visible, e.outline.Visible = false, false
+    e.name.Visible, e.dist.Visible = false, false
+    e.hpBg.Visible, e.hpFill.Visible = false, false
+    for _, l in ipairs(e.skeleton) do l.Visible = false end
+end
+
+local BONES = {
+    {"Head","Torso"},{"Torso","Left Arm"},{"Torso","Right Arm"},
+    {"Torso","Left Leg"},{"Torso","Right Leg"},
+}
+
+local function screenBox(char)
+    local head = char:FindFirstChild("Head")
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not (head and root) then return nil end
+    local cam = workspace.CurrentCamera
+    local ts, tOn = cam:WorldToViewportPoint(head.Position + Vector3.new(0, head.Size.Y/2 + 0.3, 0))
+    local bs, bOn = cam:WorldToViewportPoint(root.Position - Vector3.new(0, 2.9, 0))
+    if not (tOn and bOn) or ts.Z <= 0 then return nil end
+    local h = math.abs(bs.Y - ts.Y)
+    if h < 4 or h > 2000 then return nil end
+    return ts.X - h/4, ts.Y, h/2, h
+end
+
+RunSvc.RenderStepped:Connect(function()
+    if not S.EspOn then
+        -- ensure all drawings hidden when off
+        for _, e in ipairs(espPool) do
+            if e.box.Visible then hideEsp(e) end
+        end
+        return
+    end
+
+    local cam = workspace.CurrentCamera
+    if not cam then return end
+    local camPos = cam.CFrame.Position
+    local slot = 0
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LP and alive(p) then
+            local char = p.Character
+            local root = char:FindFirstChild("HumanoidRootPart")
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            if root and hum then
+                local d = (root.Position - camPos).Magnitude
+                if d <= S.EspMaxDist then
+                    local team = sameTeam(p)
+                    local col = team and S.EspTeamColor or S.EspEnemyColor
+                    local x, y, w, h = screenBox(char)
+                    if x then
+                        slot = slot + 1
+                        local e = getEsp(slot)
+                        if S.EspBox then
+                            e.outline.Position, e.outline.Size = Vector2.new(x,y), Vector2.new(w,h)
+                            e.outline.Visible = true
+                            e.box.Position, e.box.Size, e.box.Color = Vector2.new(x,y), Vector2.new(w,h), col
+                            e.box.Visible = true
+                        else e.box.Visible, e.outline.Visible = false, false end
+                        if S.EspName then
+                            e.name.Text, e.name.Color = p.Name, col
+                            e.name.Position = Vector2.new(x + w/2, y - 16)
+                            e.name.Visible = true
+                        else e.name.Visible = false end
+                        if S.EspDist then
+                            e.dist.Text = string.format("%.0f", d)
+                            e.dist.Position = Vector2.new(x + w/2, y + h + 2)
+                            e.dist.Color = Color3.fromRGB(220,220,220)
+                            e.dist.Visible = true
+                        else e.dist.Visible = false end
+                        if S.EspHealth then
+                            local pct = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
+                            e.hpBg.Position, e.hpBg.Size = Vector2.new(x - 6, y), Vector2.new(3, h)
+                            e.hpBg.Visible = true
+                            local fh = math.max(1, h * pct)
+                            e.hpFill.Position, e.hpFill.Size = Vector2.new(x - 6, y + h - fh), Vector2.new(3, fh)
+                            e.hpFill.Color = Color3.fromRGB(
+                                math.floor(255*(1-pct)), math.floor(220*pct), 60)
+                            e.hpFill.Visible = true
+                        else
+                            e.hpBg.Visible, e.hpFill.Visible = false, false
+                        end
+                        if S.EspSkeleton then
+                            for i, pair in ipairs(BONES) do
+                                local a, b = char:FindFirstChild(pair[1]), char:FindFirstChild(pair[2])
+                                local line = e.skeleton[i]
+                                if a and b then
+                                    local pa, oa = cam:WorldToViewportPoint(a.Position)
+                                    local pb, ob = cam:WorldToViewportPoint(b.Position)
+                                    if oa and ob and pa.Z > 0 and pb.Z > 0 then
+                                        line.From = Vector2.new(pa.X, pa.Y)
+                                        line.To = Vector2.new(pb.X, pb.Y)
+                                        line.Color = col
+                                        line.Visible = true
+                                    else line.Visible = false end
+                                else line.Visible = false end
+                            end
+                        else
+                            for _, l in ipairs(e.skeleton) do l.Visible = false end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    for i = slot + 1, #espPool do hideEsp(espPool[i]) end
+end)
+
+local worldOriginal = {
+    Brightness = Lighting.Brightness,
+    Ambient = Lighting.Ambient,
+    OutdoorAmbient = Lighting.OutdoorAmbient,
+    GlobalShadows = Lighting.GlobalShadows,
+    FogStart = Lighting.FogStart,
+    FogEnd = Lighting.FogEnd,
+    ClockTime = Lighting.ClockTime,
+}
+
+local SKYBOXES = {
+    ["Default"] = nil,
+    ["Purple Nebula"] = {Bk="rbxassetid://159454299",Dn="rbxassetid://159454296",Ft="rbxassetid://159454293",Lf="rbxassetid://159454286",Rt="rbxassetid://159454300",Up="rbxassetid://159454288"},
+    ["Christmas"] = {Bk="rbxassetid://155657655",Dn="rbxassetid://155674246",Ft="rbxassetid://155657609",Lf="rbxassetid://155657671",Rt="rbxassetid://155657619",Up="rbxassetid://155674931"},
+    ["Clouds"] = {Bk="rbxassetid://225469345",Dn="rbxassetid://225469349",Ft="rbxassetid://225469359",Lf="rbxassetid://225469364",Rt="rbxassetid://225469372",Up="rbxassetid://225469380"},
+    ["Sunrise"] = {Bk="rbxassetid://600830446",Dn="rbxassetid://600831635",Ft="rbxassetid://600832720",Lf="rbxassetid://600886090",Rt="rbxassetid://600833862",Up="rbxassetid://600835177"},
+    ["Dark Storms"] = {Bk="rbxassetid://150283828",Dn="rbxassetid://150283728",Ft="rbxassetid://150283781",Lf="rbxassetid://150283702",Rt="rbxassetid://150283748",Up="rbxassetid://150283877"},
+    ["Night Sky"] = {Bk="rbxassetid://12064107",Dn="rbxassetid://12064152",Ft="rbxassetid://12064121",Lf="rbxassetid://12063984",Rt="rbxassetid://12064115",Up="rbxassetid://12064131"},
+    ["Pink Daylight"] = {Bk="rbxassetid://271042516",Dn="rbxassetid://271077243",Ft="rbxassetid://271042556",Lf="rbxassetid://271042310",Rt="rbxassetid://271042467",Up="rbxassetid://271077958"},
+    ["Neptune"] = {Bk="rbxassetid://218955819",Dn="rbxassetid://218953419",Ft="rbxassetid://218954524",Lf="rbxassetid://218958493",Rt="rbxassetid://218957134",Up="rbxassetid://218950090"},
+    ["Redshift"] = {Bk="rbxassetid://401664839",Dn="rbxassetid://401664862",Ft="rbxassetid://401664960",Lf="rbxassetid://401664881",Rt="rbxassetid://401664901",Up="rbxassetid://401664936"},
+}
+local skyboxNames = {}
+for k in pairs(SKYBOXES) do skyboxNames[#skyboxNames+1] = k end
+table.sort(skyboxNames, function(a,b)
+    if a == "Default" then return true end
+    if b == "Default" then return false end
+    return a < b
+end)
+
+local currentSky = nil
+local function applySkybox(name)
+    if currentSky then pcall(function() currentSky:Destroy() end); currentSky = nil end
+    local data = SKYBOXES[name]
+    if not data then return end
+    local sky = Instance.new("Sky")
+    sky.Name = "Origin_Sky"
+    sky.SkyboxBk, sky.SkyboxDn, sky.SkyboxFt = data.Bk, data.Dn, data.Ft
+    sky.SkyboxLf, sky.SkyboxRt, sky.SkyboxUp = data.Lf, data.Rt, data.Up
+    sky.Parent = Lighting
+    currentSky = sky
+end
+
+RunSvc.RenderStepped:Connect(function()
+
+    if not (S.Fullbright or S.NoFog or S.TimeOn or S.Brightness or S.Ambient) then return end
+    if S.Fullbright then
+        Lighting.Brightness = 3
+        Lighting.Ambient = Color3.fromRGB(180,180,180)
+        Lighting.OutdoorAmbient = Color3.fromRGB(200,200,200)
+        Lighting.GlobalShadows = false
+    end
+    if S.NoFog then
+        Lighting.FogEnd = 1e6
+        Lighting.FogStart = 0
+    end
+    if S.TimeOn then Lighting.ClockTime = S.TimeValue end
+    if S.Brightness then Lighting.Brightness = S.BrightnessVal end
+    if S.Ambient then Lighting.Ambient = S.AmbientColor end
+end)
+
+
+local MATERIALS = {"ForceField","Neon","Glass","Metal","SmoothPlastic","Marble","Plastic"}
+local BODY_PARTS = {
+    "Head","Torso","Left Arm","Right Arm","Left Leg","Right Leg",
+    "UpperTorso","LowerTorso","LeftUpperArm","LeftLowerArm","LeftHand",
+    "RightUpperArm","RightLowerArm","RightHand","LeftUpperLeg","LeftLowerLeg",
+    "LeftFoot","RightUpperLeg","RightLowerLeg","RightFoot",
+}
+local playerChamsSaved = {}
+
+local function applyPlayerChams()
+    local char = myChar(); if not char then return end
+    local mat = Enum.Material[S.PlayerChamsMat] or Enum.Material.ForceField
+    for _, name in ipairs(BODY_PARTS) do
+        local part = char:FindFirstChild(name)
+        if part and part:IsA("BasePart") then
+            if not playerChamsSaved[part] then
+                playerChamsSaved[part] = {
+                    Color = part.Color,
+                    Material = part.Material,
+                    Transparency = part.Transparency,
+                }
+            end
+            pcall(function()
+                part.Material = mat
+                part.Color = S.PlayerChamsColor
+                part.Transparency = S.PlayerChamsTrans
+            end)
+        end
+    end
+end
+
+local function restorePlayerChams()
+    for p, o in pairs(playerChamsSaved) do
+        if p and p.Parent then
+            pcall(function()
+                p.Color = o.Color
+                p.Material = o.Material
+                p.Transparency = o.Transparency
+            end)
+        end
+    end
+    playerChamsSaved = {}
+end
+
+RunSvc.Heartbeat:Connect(function()
+    if not S.PlayerChams then return end
+    applyPlayerChams()
+end)
+
+
+local gunChamsSaved = {}
+
+local function findGunModel()
+    local cam = workspace.CurrentCamera
+    if not cam then return nil end
+    for _, d in ipairs(cam:GetChildren()) do
+        if d:IsA("Model") and d:FindFirstChildWhichIsA("BasePart") then
+            return d
+        end
+    end
+    return nil
+end
+
+local function applyGunChams()
+    local gun = findGunModel(); if not gun then return end
+    local mat = Enum.Material[S.GunChamsMat] or Enum.Material.Neon
+    for _, part in ipairs(gun:GetDescendants()) do
+        if part:IsA("BasePart") then
+            if not gunChamsSaved[part] then
+                gunChamsSaved[part] = { Color = part.Color, Material = part.Material }
+            end
+            pcall(function()
+                part.Material = mat
+                part.Color = S.GunChamsColor
+            end)
+        end
+    end
+end
+
+local function restoreGunChams()
+    for p, o in pairs(gunChamsSaved) do
+        if p and p.Parent then
+            pcall(function() p.Color = o.Color p.Material = o.Material end)
+        end
+    end
+    gunChamsSaved = {}
+end
+
+RunSvc.Heartbeat:Connect(function()
+    if not S.GunChams then return end
+    applyGunChams()
+end)
+
+
+local Window = Library:CreateWindow({
+    Title = "Origin Hub  |  Prison Life",
+    Center = true,
+    AutoShow = true,
+    TabPadding = 8,
+    MenuFadeTime = 0.2,
+})
+
+local CombatTab = Window:AddTab("Combat")
+
+-- Silent Aim group
+local silentBox = CombatTab:AddLeftGroupbox("Silent Aim")
+local silentToggle = silentBox:AddToggle("rv_silent", {
+    Text = "Enable Silent Aim",
+    Default = false,
+    Tooltip = "Aims shots at nearest enemy in FOV",
+    Callback = function(v)
+        S.SilentAim = v
+        if v then
+            installCastRay()
+        else
+            
+            silentPart, silentTarget = nil, nil
+        end
+    end,
+})
+silentToggle:AddKeyPicker("rv_silent_key", {
+    Default = "None", SyncToggleState = true, Mode = "Toggle",
+    Text = "Silent Aim Key", NoUI = false,
+})
+silentBox:AddSlider("rv_silentfov", {
+    Text = "FOV", Min = 20, Max = 800, Default = 300, Rounding = 0,
+    Callback = function(v) S.SilentFOV = v end,
+})
+silentBox:AddDropdown("rv_silentpart", {
+    Values = { "Head","Torso","HumanoidRootPart" }, Default = "Head", Multi = false,
+    Text = "Target Part",
+    Callback = function(v) S.SilentTargetPart = v end,
+})
+silentBox:AddToggle("rv_wallbang", {
+    Text = "Wallbang",
+    Default = false,
+    Tooltip = "Shots ignore walls (requires silent aim)",
+    Callback = function(v)
+        S.Wallbang = v
+        if v and not S.SilentAim then
+        
+            S.SilentAim = true
+            installCastRay()
+            if Toggles.rv_silent then Toggles.rv_silent:SetValue(true) end
+        end
+    end,
+})
+
+local rageBox = CombatTab:AddLeftGroupbox("Ragebot")
+local rageToggle = rageBox:AddToggle("rv_rage", {
+    Text = "Enable Ragebot",
+    Default = false,
+    Tooltip = "Auto-kills every enemy on the server",
+    Callback = function(v) S.RageBot = v end,
+})
+rageToggle:AddKeyPicker("rv_rage_key", {
+    Default = "None", SyncToggleState = true, Mode = "Toggle",
+    Text = "Ragebot Key", NoUI = false,
+})
+rageBox:AddDropdown("rv_ragemode", {
+    Values = { "Gun", "TP + Melee" }, Default = "Gun", Multi = false,
+    Text = "Mode",
+    Callback = function(v) S.RageMode = v end,
+})
+rageBox:AddSlider("rv_ragedelay", {
+    Text = "Delay Between Kills", Min = 0.02, Max = 0.5, Default = 0.1, Rounding = 2,
+    Suffix = "s",
+    Callback = function(v) S.RageDelay = v end,
+})
+rageBox:AddToggle("rv_rageteam", {
+    Text = "Team Check",
+    Default = true,
+    Callback = function(v) S.RageTeamCheck = v end,
+})
+
+
+local auraBox = CombatTab:AddRightGroupbox("Auras")
+
+local meleeToggle = auraBox:AddToggle("rv_melee", {
+    Text = "Melee Aura",
+    Default = false,
+    Tooltip = "Automatically punches nearby enemies",
+    Callback = function(v) S.MeleeAura = v end,
+})
+meleeToggle:AddKeyPicker("rv_melee_key", {
+    Default = "None", SyncToggleState = true, Mode = "Toggle",
+    Text = "Melee Aura Key", NoUI = false,
+})
+auraBox:AddSlider("rv_meleerange", {
+    Text = "Melee Range", Min = 1, Max = 10, Default = 4, Rounding = 1,
+    Callback = function(v) S.MeleeRange = v end,
+})
+auraBox:AddToggle("rv_meleetc", {
+    Text = "Melee Team Check",
+    Default = false,
+    Callback = function(v) S.MeleeTeamCheck = v end,
+})
+auraBox:AddToggle("rv_meleefr", {
+    Text = "Melee Ignore Friends",
+    Default = false,
+    Callback = function(v) S.MeleeIgnoreFriends = v end,
+})
+auraBox:AddDivider()
+
+local arrestToggle = auraBox:AddToggle("rv_arrest", {
+    Text = "Arrest Aura",
+    Default = false,
+    Tooltip = "Auto-arrests criminals / hostile inmates in range",
+    Callback = function(v) S.ArrestAura = v end,
+})
+arrestToggle:AddKeyPicker("rv_arrest_key", {
+    Default = "None", SyncToggleState = true, Mode = "Toggle",
+    Text = "Arrest Aura Key", NoUI = false,
+})
+auraBox:AddSlider("rv_arrestrange", {
+    Text = "Arrest Range", Min = 1, Max = 15, Default = 7.5, Rounding = 1,
+    Callback = function(v) S.ArrestRange = v end,
+})
+
+
+local wepBox = CombatTab:AddRightGroupbox("Weapon Mods")
+wepBox:AddToggle("rv_nospread", {
+    Text = "No Spread", Default = false,
+    Callback = function(v) S.NoSpread = v end,
+})
+wepBox:AddToggle("rv_longrange", {
+    Text = "Extended Range", Default = false,
+    Callback = function(v) S.LongRange = v end,
+})
+wepBox:AddToggle("rv_fastfire", {
+    Text = "Fast Fire", Default = false,
+    Callback = function(v) S.FastFire = v end,
+})
+wepBox:AddSlider("rv_firerate", {
+    Text = "Fire Rate", Min = 0.01, Max = 1, Default = 0.05, Rounding = 2,
+    Suffix = "s",
+    Callback = function(v) S.FireRate = v end,
+})
+wepBox:AddToggle("rv_fastreload", {
+    Text = "Fast Reload", Default = false,
+    Callback = function(v) S.FastReload = v end,
+})
+wepBox:AddToggle("rv_autoreload", {
+    Text = "Auto Reload", Default = false,
+    Callback = function(v) S.AutoReload = v end,
+})
+
+
+local defBox = CombatTab:AddRightGroupbox("Defensive & Tracers")
+local antiTaseToggle = defBox:AddToggle("rv_antitase", {
+    Text = "Anti-Tase", Default = false,
+    Tooltip = "Blocks the taser effect from freezing you",
+    Callback = function(v)
+        S.AntiTase = v
+        pcall(setAntiTase, v)
+    end,
+})
+antiTaseToggle:AddKeyPicker("rv_antitase_key", {
+    Default = "None", SyncToggleState = true, Mode = "Toggle",
+    Text = "Anti-Tase Key", NoUI = false,
+})
+
+local tracerToggle = defBox:AddToggle("rv_tracer", {
+    Text = "Bullet Tracers", Default = false,
+    Tooltip = "Draws beams from your gun to hit position",
+    Callback = function(v) S.TracersOn = v end,
+})
+tracerToggle:AddColorPicker("rv_tracer_col", {
+    Default = Color3.fromRGB(120,220,255),
+    Title = "Tracer Color",
+    Transparency = 0,
+    Callback = function(v) S.TracerColor = v end,
+})
+defBox:AddSlider("rv_tracer_thick", {
+    Text = "Tracer Thickness", Min = 0.5, Max = 10, Default = 2, Rounding = 1,
+    Callback = function(v) S.TracerThickness = v end,
+})
+defBox:AddSlider("rv_tracer_life", {
+    Text = "Tracer Lifetime", Min = 0.1, Max = 3, Default = 0.5, Rounding = 2,
+    Suffix = "s",
+    Callback = function(v) S.TracerLife = v end,
+})
+
+local VisualsTab = Window:AddTab("Visuals")
+
+local espBox = VisualsTab:AddLeftGroupbox("Player ESP")
+local espToggle = espBox:AddToggle("rv_esp", {
+    Text = "Enable ESP", Default = false,
+    Callback = function(v) S.EspOn = v end,
+})
+espToggle:AddKeyPicker("rv_esp_key", {
+    Default = "None", SyncToggleState = true, Mode = "Toggle",
+    Text = "ESP Key", NoUI = false,
+})
+espToggle:AddColorPicker("rv_esp_encol", {
+    Default = Color3.fromRGB(255,80,80),
+    Title = "Enemy Color",
+    Transparency = 0,
+    Callback = function(v) S.EspEnemyColor = v end,
+})
+espToggle:AddColorPicker("rv_esp_tmcol", {
+    Default = Color3.fromRGB(90,200,255),
+    Title = "Team Color",
+    Transparency = 0,
+    Callback = function(v) S.EspTeamColor = v end,
+})
+espBox:AddToggle("rv_espbox", { Text = "Box", Default = true, Callback = function(v) S.EspBox = v end })
+espBox:AddToggle("rv_espname", { Text = "Name", Default = true, Callback = function(v) S.EspName = v end })
+espBox:AddToggle("rv_espdist", { Text = "Distance", Default = true, Callback = function(v) S.EspDist = v end })
+espBox:AddToggle("rv_esphp", { Text = "Health Bar", Default = true, Callback = function(v) S.EspHealth = v end })
+espBox:AddToggle("rv_espskel", { Text = "Skeleton", Default = false, Callback = function(v) S.EspSkeleton = v end })
+espBox:AddToggle("rv_esptc", { Text = "Team Check", Default = true, Callback = function(v) S.EspTeamCheck = v end })
+espBox:AddSlider("rv_espmax", {
+    Text = "Max Distance", Min = 100, Max = 5000, Default = 2000, Rounding = 0,
+    Suffix = " studs",
+    Callback = function(v) S.EspMaxDist = v end,
+})
+
+-- World
+local worldBox = VisualsTab:AddLeftGroupbox("World")
+local fbToggle = worldBox:AddToggle("rv_fb", {
+    Text = "Fullbright", Default = false,
+    Callback = function(v)
+        S.Fullbright = v
+        if not v then
+            Lighting.Brightness = worldOriginal.Brightness
+            Lighting.Ambient = worldOriginal.Ambient
+            Lighting.OutdoorAmbient = worldOriginal.OutdoorAmbient
+            Lighting.GlobalShadows = worldOriginal.GlobalShadows
+        end
+    end,
+})
+fbToggle:AddKeyPicker("rv_fb_key", {
+    Default = "None", SyncToggleState = true, Mode = "Toggle",
+    Text = "Fullbright Key", NoUI = false,
+})
+local fogToggle = worldBox:AddToggle("rv_nofog", {
+    Text = "No Fog", Default = false,
+    Callback = function(v)
+        S.NoFog = v
+        if not v then
+            Lighting.FogStart = worldOriginal.FogStart
+            Lighting.FogEnd = worldOriginal.FogEnd
+        end
+    end,
+})
+fogToggle:AddKeyPicker("rv_nofog_key", {
+    Default = "None", SyncToggleState = true, Mode = "Toggle",
+    Text = "No Fog Key", NoUI = false,
+})
+local timeToggle = worldBox:AddToggle("rv_time", {
+    Text = "Time of Day", Default = false,
+    Callback = function(v)
+        S.TimeOn = v
+        if not v then Lighting.ClockTime = worldOriginal.ClockTime end
+    end,
+})
+worldBox:AddSlider("rv_timeval", {
+    Text = "Time", Min = 0, Max = 24, Default = 14, Rounding = 0,
+    Callback = function(v) S.TimeValue = v end,
+})
+local brightToggle = worldBox:AddToggle("rv_bright", {
+    Text = "Custom Brightness", Default = false,
+    Callback = function(v)
+        S.Brightness = v
+        if not v then Lighting.Brightness = worldOriginal.Brightness end
+    end,
+})
+worldBox:AddSlider("rv_brightval", {
+    Text = "Brightness", Min = 0, Max = 10, Default = 3, Rounding = 1,
+    Callback = function(v) S.BrightnessVal = v end,
+})
+local ambToggle = worldBox:AddToggle("rv_ambient", {
+    Text = "Custom Ambient", Default = false,
+    Callback = function(v)
+        S.Ambient = v
+        if not v then Lighting.Ambient = worldOriginal.Ambient end
+    end,
+})
+ambToggle:AddColorPicker("rv_ambient_col", {
+    Default = Color3.fromRGB(180,180,180),
+    Title = "Ambient Color",
+    Transparency = 0,
+    Callback = function(v) S.AmbientColor = v end,
+})
+
+local skyBox = VisualsTab:AddRightGroupbox("Skybox")
+skyBox:AddDropdown("rv_sky", {
+    Values = skyboxNames, Default = "Default", Multi = false, Text = "Skybox",
+    Callback = function(v)
+        S.Skybox = v
+        applySkybox(v)
+    end,
+})
+
+
+local MoveTab = Window:AddTab("Movement")
+
+local flyBox = MoveTab:AddLeftGroupbox("Fly")
+local flyToggle = flyBox:AddToggle("rv_fly", {
+    Text = "Enable Fly", Default = false,
+    Callback = function(v)
+        S.Fly = v
+        if v then startFly() else stopFly() end
+    end,
+})
+flyToggle:AddKeyPicker("rv_fly_key", {
+    Default = "None", SyncToggleState = true, Mode = "Toggle",
+    Text = "Fly Key", NoUI = false,
+})
+flyBox:AddSlider("rv_flyspd", {
+    Text = "Fly Speed", Min = 20, Max = 500, Default = 80, Rounding = 0,
+    Callback = function(v) S.FlySpeed = v end,
+})
+
+local moveBox = MoveTab:AddLeftGroupbox("Speed & Jump")
+local speedToggle = moveBox:AddToggle("rv_speed", {
+    Text = "Walk Speed", Default = false,
+    Callback = function(v)
+        S.Speed = v
+        if not v then
+            local h = myHum()
+            if h then h.WalkSpeed = 16 end
+        end
+    end,
+})
+speedToggle:AddKeyPicker("rv_speed_key", {
+    Default = "None", SyncToggleState = true, Mode = "Toggle",
+    Text = "Speed Key", NoUI = false,
+})
+moveBox:AddSlider("rv_speedval", {
+    Text = "Speed", Min = 16, Max = 200, Default = 60, Rounding = 0,
+    Callback = function(v) S.SpeedVal = v end,
+})
+local jumpToggle = moveBox:AddToggle("rv_jump", {
+    Text = "Jump Power", Default = false,
+    Callback = function(v)
+        S.Jump = v
+        if not v then
+            local h = myHum()
+            if h then h.JumpPower = 50 end
+        end
+    end,
+})
+jumpToggle:AddKeyPicker("rv_jump_key", {
+    Default = "None", SyncToggleState = true, Mode = "Toggle",
+    Text = "Jump Key", NoUI = false,
+})
+moveBox:AddSlider("rv_jumpval", {
+    Text = "Jump", Min = 50, Max = 500, Default = 120, Rounding = 0,
+    Callback = function(v) S.JumpVal = v end,
+})
+local infJumpToggle = moveBox:AddToggle("rv_infjump", {
+    Text = "Infinite Jump", Default = false,
+    Callback = function(v) S.InfJump = v end,
+})
+infJumpToggle:AddKeyPicker("rv_infjump_key", {
+    Default = "None", SyncToggleState = true, Mode = "Toggle",
+    Text = "Inf Jump Key", NoUI = false,
+})
+
+local noClipBox = MoveTab:AddRightGroupbox("Noclip")
+local ncToggle = noClipBox:AddToggle("rv_noclip", {
+    Text = "Enable Noclip", Default = false,
+    Tooltip = "Destroys CharacterCollision module. Requires rejoin to restore.",
+    Callback = function(v)
+        S.NoClip = v
+        pcall(setNoClip, v)
+    end,
+})
+ncToggle:AddKeyPicker("rv_noclip_key", {
+    Default = "None", SyncToggleState = true, Mode = "Toggle",
+    Text = "Noclip Key", NoUI = false,
+})
+
+local tpBox = MoveTab:AddRightGroupbox("Teleport")
+tpBox:AddButton({
+    Text = "TP to Nearest Enemy",
+    Func = function()
+        local h = myHrp(); if not h then return end
+        local best, bestD = nil, math.huge
+        for _, p in ipairs(Players:GetPlayers()) do
+            local t = hrpOf(p)
+            if t and isEnemy(p) then
+                local d = (t.Position - h.Position).Magnitude
+                if d < bestD then bestD, best = d, t end
+            end
+        end
+        if best then
+            pcall(function()
+                h.CFrame = CFrame.lookAt(
+                    best.Position - best.CFrame.LookVector * 3 + Vector3.new(0,2,0),
+                    best.Position)
+            end)
+        end
+    end,
+})
+tpBox:AddButton({
+    Text = "TP Up +50",
+    Func = function()
+        local h = myHrp(); if h then h.CFrame = h.CFrame + Vector3.new(0,50,0) end
+    end,
+})
+tpBox:AddButton({
+    Text = "TP Down -50",
+    Func = function()
+        local h = myHrp(); if h then h.CFrame = h.CFrame - Vector3.new(0,50,0) end
+    end,
+})
+
+
+local CustomTab = Window:AddTab("Customization")
+
+local pcBox = CustomTab:AddLeftGroupbox("Player Chams")
+local pcToggle = pcBox:AddToggle("rv_pchams", {
+    Text = "Enable Player Chams", Default = false,
+    Callback = function(v)
+        S.PlayerChams = v
+        if not v then restorePlayerChams() end
+    end,
+})
+pcToggle:AddColorPicker("rv_pchams_col", {
+    Default = Color3.fromRGB(255,120,255),
+    Title = "Chams Color",
+    Transparency = 0,
+    Callback = function(v) S.PlayerChamsColor = v end,
+})
+pcBox:AddDropdown("rv_pchamsmat", {
+    Values = MATERIALS, Default = "ForceField", Multi = false, Text = "Material",
+    Callback = function(v) S.PlayerChamsMat = v end,
+})
+pcBox:AddSlider("rv_pchamst", {
+    Text = "Transparency", Min = 0, Max = 1, Default = 0.5, Rounding = 2,
+    Callback = function(v) S.PlayerChamsTrans = v end,
+})
+
+local gcBox = CustomTab:AddLeftGroupbox("Gun Chams")
+local gcToggle = gcBox:AddToggle("rv_gchams", {
+    Text = "Enable Gun Chams", Default = false,
+    Callback = function(v)
+        S.GunChams = v
+        if not v then restoreGunChams() end
+    end,
+})
+gcToggle:AddColorPicker("rv_gchams_col", {
+    Default = Color3.fromRGB(255,140,30),
+    Title = "Chams Color",
+    Transparency = 0,
+    Callback = function(v) S.GunChamsColor = v end,
+})
+gcBox:AddDropdown("rv_gchamsmat", {
+    Values = MATERIALS, Default = "Neon", Multi = false, Text = "Material",
+    Callback = function(v) S.GunChamsMat = v end,
+})
+
+
+local ConfigTab = Window:AddTab("Config")
+
+local infoBox = ConfigTab:AddLeftGroupbox("About")
+infoBox:AddLabel("Origin Hub v3 -- Prison Life")
+infoBox:AddLabel("Silent Aim | Wallbang | Ragebot | ESP")
+infoBox:AddLabel("Press RIGHT SHIFT to open menu")
+
+local cfgBox = ConfigTab:AddRightGroupbox("Save / Load")
+cfgBox:AddLabel("Use the header pencil to save configs")
+cfgBox:AddDivider()
+cfgBox:AddButton({
+    Text = "Open Save Manager",
+    Func = function() SaveManager:Open() end,
+})
+cfgBox:AddDivider()
+cfgBox:AddButton({
+    Text = "Unload Origin Hub",
+    Func = function()
+        -- restore everything that can be restored
+        pcall(restorePlayerChams)
+        pcall(restoreGunChams)
+        pcall(stopFly)
+        pcall(setAntiTase, false)
+        pcall(function()
+            Lighting.Brightness = worldOriginal.Brightness
+            Lighting.Ambient = worldOriginal.Ambient
+            Lighting.OutdoorAmbient = worldOriginal.OutdoorAmbient
+            Lighting.GlobalShadows = worldOriginal.GlobalShadows
+            Lighting.FogStart = worldOriginal.FogStart
+            Lighting.FogEnd = worldOriginal.FogEnd
+            Lighting.ClockTime = worldOriginal.ClockTime
+        end)
+        pcall(function() if currentSky then currentSky:Destroy() end end)
+        -- hide drawings
+        for _, e in ipairs(espPool) do
+            pcall(function()
+                e.box:Remove() e.outline:Remove() e.name:Remove() e.dist:Remove()
+                e.hpBg:Remove() e.hpFill:Remove()
+                for _, l in ipairs(e.skeleton) do l:Remove() end
+            end)
+        end
+        for _, t in ipairs(activeTracers) do
+            pcall(function() t.beam:Destroy() t.near:Destroy() t.far:Destroy() end)
+        end
+        pcall(function() tracerFolder:Destroy() end)
+        pcall(function() fovCircle:Remove() end)
+        -- unhook castRay
+        pcall(uninstallCastRay)
+        Library:Unload()
+    end,
+})
+
+SaveManager:SetLibrary(Library)
+ThemeManager:SetLibrary(Library)
+SaveManager:IgnoreThemeSettings()
+ThemeManager:SetFolder("OriginHub")
+SaveManager:SetFolder("OriginHub/PrisonLife")
+SaveManager:BuildConfigSection(ConfigTab)
+ThemeManager:ApplyToTab(ConfigTab)
+SaveManager:LoadAutoloadConfig()
