@@ -423,7 +423,6 @@ function AR2_setAntiFallStun() end
 function AR2_setVehicleEquip() end
 function AR2_setRemoveDoors() end
 function AR2_setRemoveSunRays() end
-function AR2_setContainerPersist() end
 function AR2_setCustomAmbient() end
 function AR2_carPick() return nil end
 function AR2_carConfig() return nil end
@@ -8021,87 +8020,9 @@ function AR2_setVehicleEquip(enabled)
 end
 
 
-AR2_doorsRemoved = {}
-AR2_doorsConn = nil
-
-local function AR2_hideDoorPart(part)
-    if not part:IsA("BasePart") then return end
-    if AR2_doorsRemoved[part] ~= nil then return end
-    AR2_doorsRemoved[part] = {
-        transparency = part.Transparency,
-        canCollide   = part.CanCollide,
-        canQuery     = part.CanQuery,
-        canTouch     = part.CanTouch,
-    }
-    pcall(function()
-        part.Transparency = 1
-        part.CanCollide   = false
-        part.CanQuery     = false
-        part.CanTouch     = false
-    end)
-end
-
-local function AR2_hideDoor(inst)
-    if inst:IsA("BasePart") then
-        AR2_hideDoorPart(inst)
-    else
-        for _, d in ipairs(inst:GetDescendants()) do
-            if d:IsA("BasePart") then AR2_hideDoorPart(d) end
-        end
-    end
-end
-
-local function AR2_isDoorInstance(inst)
-    if inst.Name ~= "Door" then return false end
-    local parent = inst.Parent
-    if not parent then return false end
-    local container = parent.Parent
-    return container ~= nil and container.Name == "Doors"
-end
-
-local function AR2_scanDoors(root)
-    for _, desc in ipairs(root:GetDescendants()) do
-        if AR2_isDoorInstance(desc) then AR2_hideDoor(desc) end
-    end
-end
-
-function AR2_setRemoveDoors(enabled)
-    AR2_CFG.visuals.removeDoors = enabled
-
-    if AR2_doorsConn then
-        pcall(function() AR2_doorsConn:Disconnect() end)
-        AR2_doorsConn = nil
-    end
-
-    if enabled then
-        local map = AR2_Workspace:FindFirstChild("Map")
-        local mapElements = map and map:FindFirstChild("Elements")
-        if not mapElements then return end
-        pcall(AR2_scanDoors, mapElements)
-        AR2_doorsConn = mapElements.DescendantAdded:Connect(function(desc)
-            if not AR2_CFG.visuals.removeDoors then return end
-            task.defer(function()
-                pcall(function()
-                    if desc and desc.Parent and AR2_isDoorInstance(desc) then
-                        AR2_hideDoor(desc)
-                    end
-                end)
-            end)
-        end)
-    else
-        for part, saved in pairs(AR2_doorsRemoved) do
-            pcall(function()
-                if part and part.Parent then
-                    part.Transparency = saved.transparency
-                    part.CanCollide   = saved.canCollide
-                    part.CanQuery     = saved.canQuery
-                    part.CanTouch     = saved.canTouch
-                end
-            end)
-        end
-        AR2_doorsRemoved = {}
-    end
-end
+-- Remove Doors feature deleted. AR2_setRemoveDoors stays a no-op (stub defined
+-- earlier) so any leftover calls are harmless. The DescendantAdded scan this
+-- used to install was the likely cause of the error flood.
 
 AR2_sunRaysSaved = {}
 
@@ -10967,10 +10888,6 @@ function AR2_buildUI()
         addToggle(removeSection,"Remove Leaves",AR2_CFG.misc,"removeLeaves",function(v) AR2_toggleRemoveLeaves(v) end)
         addToggle(removeSection,"Remove Bushes",AR2_CFG.misc,"removeBushes",function(v) AR2_toggleRemoveBushes(v) end)
 
-        local doorSection = worldTab:AddSection({Name="Doors"})
-        addToggle(doorSection,"Remove Doors",AR2_CFG.visuals,"removeDoors",
-            function(v) AR2_setRemoveDoors(v) end)
-        doorSection:AddLabel("Removes Map/Elements door parts")
         local sunSection = worldTab:AddSection({Name="Sun Rays",Position="right"})
         addToggle(sunSection,"Remove Sun Rays",AR2_CFG.visuals,"removeSunRays",
             function(v) AR2_setRemoveSunRays(v) end)
@@ -11430,7 +11347,6 @@ function AR2_unload()
     AR2_cosRemoveAll()
     AR2_setAutoReload(false)
     AR2_setInstantInteract(false)
-    AR2_setContainerPersist(false)
     AR2_setPlayerJesus(false)
     AR2_setSelfBacktrack(false)
     AR2_setJumpCircle(false)
