@@ -17,6 +17,19 @@ local DIM      = Color3.fromRGB(150, 156, 168)
 
 local SCRIPTS = {
     {
+        key      = "gfa",
+        title    = "GUN FIGHT ARENA",
+        subtitle = "Gun Fight Arena",
+        version  = "v3.5",
+        url      = "https://raw.githubusercontent.com/liamster7177/67/refs/heads/main/Gun%20Fight%20Arena",
+        image    = {
+            "https://tr.rbxcdn.com/180DAY-118857a5f25329aed7ac4b26b02717e8/768/432/Image/Png/noFilter",
+            "https://tr.rbxcdn.com/180DAY-118857a5f25329aed7ac4b26b02717e8/768/432/Image/Webp/noFilter",
+            "rbxthumb://type=GameThumbnail&id=15514727567&w=768&h=432",
+        },
+        placeIds = { [15514727567] = true },
+    },
+    {
         key      = "twd",
         title    = "TWD ONLINE",
         subtitle = "The Walking Dead Online",
