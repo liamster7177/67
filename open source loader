@@ -17,6 +17,18 @@ local DIM      = Color3.fromRGB(150, 156, 168)
 
 local SCRIPTS = {
     {
+        key      = "huss",
+        title    = "HUSS VALLEY",
+        subtitle = "Chicken or Hero",
+        version  = "v1.9",
+        url      = "https://raw.githubusercontent.com/liamster7177/67/refs/heads/main/Huss%20Valley",
+        image    = {
+            "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNN1rTxqHOULjp_eyOk54h-lSdEQfFeWj3ByUJENt3CQ&s",
+            "rbxthumb://type=GameThumbnail&id=107535308163741&w=768&h=432",
+        },
+        placeIds = { [107535308163741] = true },
+    },
+    {
         key      = "gfa",
         title    = "GUN FIGHT ARENA",
         subtitle = "Gun Fight Arena",
@@ -190,79 +202,111 @@ dim.Parent = gui
 local panel = Instance.new("Frame")
 panel.AnchorPoint = Vector2.new(0.5, 0.5)
 panel.Position = UDim2.fromScale(0.5, 0.5)
-panel.Size = UDim2.fromOffset(660, 430)
+panel.Size = UDim2.fromOffset(720, 560)
 panel.BackgroundColor3 = BG
 panel.BorderSizePixel = 0
 panel.Active = true
 panel.ZIndex = 2
 panel.Parent = gui
 
-local pc = Instance.new("UICorner") pc.CornerRadius = UDim.new(0, 12) pc.Parent = panel
+local pc = Instance.new("UICorner") pc.CornerRadius = UDim.new(0, 16) pc.Parent = panel
 local ps = Instance.new("UIStroke")
-ps.Color = Color3.fromRGB(44, 48, 58)
-ps.Thickness = 1
-ps.Transparency = 0.3
+ps.Color = Color3.fromRGB(48, 52, 64)
+ps.Thickness = 1.5
+ps.Transparency = 0.25
 ps.Parent = panel
+local pgrad = Instance.new("UIGradient")
+pgrad.Rotation = 90
+pgrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(22, 24, 31)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(12, 13, 17)),
+})
+pgrad.Parent = panel
+
+-- header bar
+local header = Instance.new("Frame")
+header.BackgroundColor3 = Color3.fromRGB(16, 17, 23)
+header.BackgroundTransparency = 0.25
+header.Size = UDim2.new(1, 0, 0, 78)
+header.BorderSizePixel = 0
+header.ZIndex = 3
+header.Parent = panel
+local hc = Instance.new("UICorner") hc.CornerRadius = UDim.new(0, 16) hc.Parent = header
+local hcover = Instance.new("Frame")  -- square off bottom corners of header
+hcover.BackgroundColor3 = Color3.fromRGB(16, 17, 23)
+hcover.BackgroundTransparency = 0.25
+hcover.Size = UDim2.new(1, 0, 0, 16)
+hcover.Position = UDim2.new(0, 0, 1, -16)
+hcover.BorderSizePixel = 0
+hcover.ZIndex = 3
+hcover.Parent = header
+
+-- accent bar down the left of the title
+local accentDot = Instance.new("Frame")
+accentDot.Position = UDim2.fromOffset(24, 22)
+accentDot.Size = UDim2.fromOffset(4, 34)
+accentDot.BackgroundColor3 = ACCENT
+accentDot.BorderSizePixel = 0
+accentDot.ZIndex = 4
+accentDot.Parent = panel
+local adc = Instance.new("UICorner") adc.CornerRadius = UDim.new(1, 0) adc.Parent = accentDot
+local agrad = Instance.new("UIGradient")
+agrad.Rotation = 90
+agrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 170, 70)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 110, 30)),
+})
+agrad.Parent = accentDot
 
 local title = Instance.new("TextLabel")
 title.BackgroundTransparency = 1
-title.Position = UDim2.fromOffset(24, 18)
-title.Size = UDim2.new(1, -120, 0, 26)
+title.Position = UDim2.fromOffset(40, 20)
+title.Size = UDim2.new(1, -140, 0, 26)
 title.Font = Enum.Font.GothamBold
-title.TextSize = 20
+title.TextSize = 22
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.TextColor3 = TEXT
 title.Text = "ORIGIN HUB"
-title.ZIndex = 3
+title.ZIndex = 4
 title.Parent = panel
-
-local accentDot = Instance.new("Frame")
-accentDot.Position = UDim2.fromOffset(24, 46)
-accentDot.Size = UDim2.fromOffset(34, 3)
-accentDot.BackgroundColor3 = ACCENT
-accentDot.BorderSizePixel = 0
-accentDot.ZIndex = 3
-accentDot.Parent = panel
-local adc = Instance.new("UICorner") adc.CornerRadius = UDim.new(1, 0) adc.Parent = accentDot
 
 local sub = Instance.new("TextLabel")
 sub.BackgroundTransparency = 1
-sub.Position = UDim2.fromOffset(24, 56)
-sub.Size = UDim2.new(1, -120, 0, 18)
+sub.Position = UDim2.fromOffset(40, 48)
+sub.Size = UDim2.new(1, -140, 0, 18)
 sub.Font = Enum.Font.Gotham
 sub.TextSize = 12
 sub.TextXAlignment = Enum.TextXAlignment.Left
 sub.TextColor3 = DIM
-sub.Text = "Pick a game to load"
-sub.ZIndex = 3
+sub.Text = "Select a game to load"
+sub.ZIndex = 4
 sub.Parent = panel
 
 local close = Instance.new("TextButton")
-close.Size = UDim2.fromOffset(30, 26)
-close.Position = UDim2.new(1, -44, 0, 18)
-close.BackgroundColor3 = Color3.fromRGB(38, 41, 50)
+close.Size = UDim2.fromOffset(32, 28)
+close.Position = UDim2.new(1, -48, 0, 22)
+close.BackgroundColor3 = Color3.fromRGB(40, 43, 52)
 close.Text = "X"
 close.Font = Enum.Font.GothamBold
 close.TextSize = 13
-close.TextColor3 = Color3.fromRGB(232, 124, 124)
+close.TextColor3 = Color3.fromRGB(235, 120, 120)
 close.BorderSizePixel = 0
 close.AutoButtonColor = false
-close.ZIndex = 3
+close.ZIndex = 4
 close.Parent = panel
-local cc = Instance.new("UICorner") cc.CornerRadius = UDim.new(0, 6) cc.Parent = close
+local cc = Instance.new("UICorner") cc.CornerRadius = UDim.new(0, 8) cc.Parent = close
 
 local status = Instance.new("TextLabel")
 status.BackgroundTransparency = 1
-status.Position = UDim2.fromOffset(24, 0)
-status.Size = UDim2.new(1, -48, 0, 20)
 status.AnchorPoint = Vector2.new(0, 1)
-status.Position = UDim2.new(0, 24, 1, -16)
+status.Position = UDim2.new(0, 28, 1, -14)
+status.Size = UDim2.new(1, -56, 0, 20)
 status.Font = Enum.Font.Gotham
 status.TextSize = 12
 status.TextXAlignment = Enum.TextXAlignment.Left
 status.TextColor3 = DIM
 status.Text = "ready"
-status.ZIndex = 3
+status.ZIndex = 4
 status.Parent = panel
 
 local function say(msg, color)
@@ -270,20 +314,26 @@ local function say(msg, color)
     status.TextColor3 = color or DIM
 end
 
-local holder = Instance.new("Frame")
+local holder = Instance.new("ScrollingFrame")
 holder.BackgroundTransparency = 1
-holder.Position = UDim2.fromOffset(24, 90)
-holder.Size = UDim2.new(1, -48, 0, 282)
+holder.BorderSizePixel = 0
+holder.Position = UDim2.fromOffset(20, 92)
+holder.Size = UDim2.new(1, -40, 1, -128)
+holder.CanvasSize = UDim2.new(0, 0, 0, 0)
+holder.AutomaticCanvasSize = Enum.AutomaticSize.Y
+holder.ScrollBarThickness = 4
+holder.ScrollBarImageColor3 = ACCENT
+holder.ScrollBarImageTransparency = 0.4
 holder.ZIndex = 3
 holder.Parent = panel
 
-local grid = Instance.new("UIListLayout")
-grid.FillDirection = Enum.FillDirection.Horizontal
-grid.Padding = UDim.new(0, 18)
+local grid = Instance.new("UIGridLayout")
+grid.CellSize = UDim2.fromOffset(330, 236)
+grid.CellPadding = UDim2.fromOffset(16, 16)
 grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
-grid.VerticalAlignment = Enum.VerticalAlignment.Top
 grid.SortOrder = Enum.SortOrder.LayoutOrder
 grid.Parent = holder
+local gpad = Instance.new("UIPadding") gpad.PaddingTop = UDim.new(0, 4) gpad.Parent = holder
 
 local busy = false
 
@@ -329,36 +379,44 @@ local function buildCard(entry, order)
     local card = Instance.new("TextButton")
     card.Name = entry.key
     card.LayoutOrder = order
-    card.Size = UDim2.fromOffset(292, 282)
+    card.Size = UDim2.fromOffset(330, 236)
     card.BackgroundColor3 = CARD
     card.BorderSizePixel = 0
     card.AutoButtonColor = false
     card.Text = ""
+    card.ClipsDescendants = true
     card.ZIndex = 3
     card.Parent = holder
 
-    local crn = Instance.new("UICorner") crn.CornerRadius = UDim.new(0, 10) crn.Parent = card
+    local crn = Instance.new("UICorner") crn.CornerRadius = UDim.new(0, 12) crn.Parent = card
     local strk = Instance.new("UIStroke")
     strk.Color = Color3.fromRGB(48, 52, 64)
-    strk.Thickness = 1
-    strk.Transparency = 0.35
+    strk.Thickness = 1.5
+    strk.Transparency = 0.4
     strk.Parent = card
+    local cgrad = Instance.new("UIGradient")
+    cgrad.Rotation = 90
+    cgrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 33, 41)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(23, 25, 32)),
+    })
+    cgrad.Parent = card
 
     local imgHolder = Instance.new("Frame")
     imgHolder.Position = UDim2.fromOffset(10, 10)
-    imgHolder.Size = UDim2.fromOffset(272, 153)
+    imgHolder.Size = UDim2.fromOffset(310, 120)
     imgHolder.BackgroundColor3 = Color3.fromRGB(16, 18, 23)
     imgHolder.BorderSizePixel = 0
     imgHolder.ClipsDescendants = true
     imgHolder.ZIndex = 4
     imgHolder.Parent = card
-    local ic = Instance.new("UICorner") ic.CornerRadius = UDim.new(0, 7) ic.Parent = imgHolder
+    local ic = Instance.new("UICorner") ic.CornerRadius = UDim.new(0, 9) ic.Parent = imgHolder
 
     local imgFallback = Instance.new("TextLabel")
     imgFallback.Size = UDim2.fromScale(1, 1)
     imgFallback.BackgroundTransparency = 1
     imgFallback.Font = Enum.Font.GothamBold
-    imgFallback.TextSize = 22
+    imgFallback.TextSize = 20
     imgFallback.TextColor3 = Color3.fromRGB(70, 76, 90)
     imgFallback.Text = entry.title
     imgFallback.ZIndex = 4
@@ -372,22 +430,53 @@ local function buildCard(entry, order)
     img.ZIndex = 5
     img.Parent = imgHolder
 
+    -- gradient scrim at the bottom of the image for depth
+    local scrim = Instance.new("Frame")
+    scrim.AnchorPoint = Vector2.new(0, 1)
+    scrim.Position = UDim2.fromScale(0, 1)
+    scrim.Size = UDim2.new(1, 0, 0, 48)
+    scrim.BackgroundColor3 = Color3.fromRGB(10, 11, 15)
+    scrim.BorderSizePixel = 0
+    scrim.ZIndex = 6
+    scrim.Parent = imgHolder
+    local sg = Instance.new("UIGradient")
+    sg.Rotation = 90
+    sg.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 1),
+        NumberSequenceKeypoint.new(1, 0.15),
+    })
+    sg.Parent = scrim
+
     local name = Instance.new("TextLabel")
     name.BackgroundTransparency = 1
-    name.Position = UDim2.fromOffset(14, 174)
+    name.Position = UDim2.fromOffset(14, 138)
     name.Size = UDim2.new(1, -28, 0, 22)
     name.Font = Enum.Font.GothamBold
-    name.TextSize = 17
+    name.TextSize = 18
     name.TextXAlignment = Enum.TextXAlignment.Left
     name.TextColor3 = TEXT
     name.Text = entry.title
     name.ZIndex = 4
     name.Parent = card
 
+    local badge = Instance.new("TextLabel")
+    badge.BackgroundColor3 = Color3.fromRGB(42, 34, 24)
+    badge.AnchorPoint = Vector2.new(1, 0)
+    badge.Position = UDim2.new(1, -14, 0, 139)
+    badge.Size = UDim2.fromOffset(58, 20)
+    badge.Font = Enum.Font.GothamBold
+    badge.TextSize = 11
+    badge.TextColor3 = ACCENT
+    badge.Text = entry.version
+    badge.BorderSizePixel = 0
+    badge.ZIndex = 4
+    badge.Parent = card
+    local bc = Instance.new("UICorner") bc.CornerRadius = UDim.new(0, 6) bc.Parent = badge
+
     local desc = Instance.new("TextLabel")
     desc.BackgroundTransparency = 1
-    desc.Position = UDim2.fromOffset(14, 196)
-    desc.Size = UDim2.new(1, -28, 0, 18)
+    desc.Position = UDim2.fromOffset(14, 162)
+    desc.Size = UDim2.new(1, -28, 0, 16)
     desc.Font = Enum.Font.Gotham
     desc.TextSize = 12
     desc.TextXAlignment = Enum.TextXAlignment.Left
@@ -396,39 +485,33 @@ local function buildCard(entry, order)
     desc.ZIndex = 4
     desc.Parent = card
 
-    local badge = Instance.new("TextLabel")
-    badge.BackgroundColor3 = Color3.fromRGB(38, 42, 52)
-    badge.Position = UDim2.fromOffset(14, 222)
-    badge.Size = UDim2.fromOffset(62, 20)
-    badge.Font = Enum.Font.GothamBold
-    badge.TextSize = 11
-    badge.TextColor3 = ACCENT
-    badge.Text = entry.version
-    badge.BorderSizePixel = 0
-    badge.ZIndex = 4
-    badge.Parent = card
-    local bc = Instance.new("UICorner") bc.CornerRadius = UDim.new(0, 5) bc.Parent = badge
-
     local loadBtn = Instance.new("TextLabel")
     loadBtn.BackgroundColor3 = ACCENT
-    loadBtn.Position = UDim2.fromOffset(14, 250)
-    loadBtn.Size = UDim2.new(1, -28, 0, 22)
+    loadBtn.Position = UDim2.fromOffset(14, 192)
+    loadBtn.Size = UDim2.new(1, -28, 0, 30)
     loadBtn.Font = Enum.Font.GothamBold
-    loadBtn.TextSize = 12
-    loadBtn.TextColor3 = Color3.fromRGB(18, 14, 8)
+    loadBtn.TextSize = 13
+    loadBtn.TextColor3 = Color3.fromRGB(20, 14, 6)
     loadBtn.Text = "LOAD"
     loadBtn.BorderSizePixel = 0
     loadBtn.ZIndex = 4
     loadBtn.Parent = card
-    local lc = Instance.new("UICorner") lc.CornerRadius = UDim.new(0, 6) lc.Parent = loadBtn
+    local lc = Instance.new("UICorner") lc.CornerRadius = UDim.new(0, 8) lc.Parent = loadBtn
+    local lgrad = Instance.new("UIGradient")
+    lgrad.Rotation = 90
+    lgrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 172, 72)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(246, 120, 32)),
+    })
+    lgrad.Parent = loadBtn
 
     card.MouseEnter:Connect(function()
-        TweenService:Create(card, TweenInfo.new(0.15), { BackgroundColor3 = CARD_HOV }):Play()
-        TweenService:Create(strk, TweenInfo.new(0.15), { Color = ACCENT, Transparency = 0.15 }):Play()
+        TweenService:Create(strk, TweenInfo.new(0.15), { Color = ACCENT, Transparency = 0.1 }):Play()
+        TweenService:Create(loadBtn, TweenInfo.new(0.15), { Size = UDim2.new(1, -28, 0, 32) }):Play()
     end)
     card.MouseLeave:Connect(function()
-        TweenService:Create(card, TweenInfo.new(0.15), { BackgroundColor3 = CARD }):Play()
-        TweenService:Create(strk, TweenInfo.new(0.15), { Color = Color3.fromRGB(48, 52, 64), Transparency = 0.35 }):Play()
+        TweenService:Create(strk, TweenInfo.new(0.15), { Color = Color3.fromRGB(48, 52, 64), Transparency = 0.4 }):Play()
+        TweenService:Create(loadBtn, TweenInfo.new(0.15), { Size = UDim2.new(1, -28, 0, 30) }):Play()
     end)
     card.MouseButton1Click:Connect(function() runScript(entry) end)
 
@@ -535,6 +618,6 @@ if getgenv then
     getgenv().__origin_loader_close = closeLoader
 end
 
-panel.Size = UDim2.fromOffset(660, 400)
-TweenService:Create(panel, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-    { Size = UDim2.fromOffset(660, 430) }):Play()
+panel.Size = UDim2.fromOffset(720, 528)
+TweenService:Create(panel, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+    { Size = UDim2.fromOffset(720, 560) }):Play()
